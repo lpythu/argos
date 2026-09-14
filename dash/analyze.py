@@ -14,7 +14,7 @@ _HEX_RE = re.compile(r"\b[0-9a-f]{12,}\b", re.I)
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _STAMP_RE = re.compile(r"\b20\d{2}[-/]?\d{2}[-/]?\d{2}[T _-]?\d{2}:?\d{2}:?\d{2}(?:\.\d+)?Z?\b")
 
-LIVE = frozenset({"starting", "waiting", "running", "pausing", "paused", "stopping"})
+LIVE = frozenset({"running", "paused"})
 
 
 def fingerprint(message: str) -> tuple[str, str]:
@@ -164,7 +164,7 @@ def detail(run: "Run", root: Path) -> dict[str, Any]:
                 "metric_meta": last_extra.get("metric_meta") or {},
                 "distributions": last_extra.get("distributions") or {},
                 "thresholds": last_extra.get("thresholds") or [],
-                "steps": last.steps,
+                "steps": last_extra.get("steps") or last.steps,
             }
         )
         if keys:
@@ -194,7 +194,12 @@ def detail(run: "Run", root: Path) -> dict[str, Any]:
     ]
     issue_rows.sort(key=lambda item: (-item["count"], item["message"]))
 
-    audit = report.get("resource_audit") if isinstance(report.get("resource_audit"), dict) else {}
+    audit = dict(report.get("resource_audit") or {}) if isinstance(report.get("resource_audit"), dict) else {}
+    cleanup = report.get("cleanup") if isinstance(report.get("cleanup"), dict) else {}
+    if cleanup:
+        audit["cleanup_completed"] = cleanup.get("completed")
+        audit["cleanup_failed"] = cleanup.get("failed")
+        audit["cleanup_status"] = cleanup.get("status")
     files = list_files(root)
     stats = counts(run)
     return {
@@ -212,9 +217,15 @@ def detail(run: "Run", root: Path) -> dict[str, Any]:
 def catalog(runs: list["Run"]) -> list[dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for run in sorted(runs, key=lambda item: item.created_at or datetime.min.replace(tzinfo=UTC)):
+        extras: dict[str, dict[str, Any]] = {}
+        summary = run.summary if isinstance(run.summary, dict) else {}
+        for item in summary.get("cases") or []:
+            if isinstance(item, dict) and item.get("id"):
+                extras[str(item["id"])] = item
         for row in run.cases:
             if not row.spec_id:
                 continue
+            extra = extras.get(row.spec_id, {})
             latest[row.spec_id] = {
                 "id": row.spec_id,
                 "title": row.title,
@@ -227,6 +238,12 @@ def catalog(runs: list["Run"]) -> list[dict[str, Any]]:
                 "run_id": str(run.id),
                 "run_slug": run.slug,
                 "seen_at": run.created_at.isoformat() if run.created_at else "",
+                "typical_s": int(extra.get("typical_s") or 0),
+                "mutex": str(extra.get("mutex") or ""),
+                "resources": list(extra.get("resources") or []),
+                "prefer_after": list(extra.get("prefer_after") or []),
+                "modes": list(extra.get("modes") or []),
+                "tags": list(extra.get("tags") or []),
             }
     return sorted(latest.values(), key=lambda item: item["id"])
 
@@ -303,8 +320,7 @@ def overview(runs: list["Run"], *, hours: int, env: str, catalog_ids: set[str]) 
             default=0,
         )
         issues.append(issue)
-    issues.sort(key=lambda item: (not item["open"], -item["max_streak"], str(item["last"])), reverse=False)
-    issues.sort(key=lambda item: (not item["open"], -int(item["max_streak"])))
+    issues.sort(key=lambda item: (not item["open"], -int(item["max_streak"]), str(item["last"])))
 
     completed = totals["passed"] + totals["failed"]
     totals["success_rate"] = round(100 * totals["passed"] / completed, 1) if completed else None

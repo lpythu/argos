@@ -12,7 +12,8 @@ from argos.client import Client, DashError, dash_token, dash_url, push_dir
 from argos.duration import parse_duration
 from argos.paths import out_root
 from argos.report import write_reports
-from argos.runner import write_events
+from argos.run_status import RunStatus, StopRequested
+from argos.runner import public_event, write_events
 from argos.secrets import load_secrets
 from argos.select import select
 from argos.suite import all_cases, all_packs, apply_env, env_names, execute, pack_named, packs_of
@@ -70,17 +71,6 @@ def _resolve_stack_pack(pack_id: str | None):
         raise RuntimeError("no pack defines a stack")
     names = " ".join(pack.id for pack in candidates)
     raise RuntimeError(f"choose a pack: argos up <{names}>")
-
-
-def _public_event(event: dict) -> dict:
-    row = {k: v for k, v in event.items() if k != "result"}
-    if "result" in event:
-        result = event["result"]
-        row["status"] = result.status
-        row["elapsed_s"] = result.elapsed_s
-        row["error"] = result.error
-        row["iteration"] = result.iteration
-    return row
 
 
 def run_cases(
@@ -141,6 +131,9 @@ def run_cases(
         "slug": slug,
         "mode": mode,
         "env": applied,
+        "duration": duration if soak else "",
+        "pause": pause if soak else "",
+        "fail_fast": bool(fail_fast and soak),
         "packs": [pack.id for pack in involved],
         "queries": queries,
         "runner": socket.gethostname(),
@@ -156,6 +149,22 @@ def run_cases(
         ],
     }
     dest.joinpath("run.json").write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n")
+    if len(chosen) == 1:
+        plan_title = chosen[0].spec.title
+    elif len(involved) == 1:
+        plan_title = f"{involved[0].title} · {len(chosen)} cases"
+    else:
+        plan_title = f"{len(chosen)} cases"
+    if soak:
+        plan_title += f" · soak {duration}"
+    run_status = RunStatus(
+        dest,
+        [case.spec for case in chosen],
+        title=plan_title,
+        mode=mode,
+        env=applied,
+        duration=duration if soak else "",
+    )
     events = dest / "events.jsonl"
     progress = Progress([c.spec for c in chosen], str(dest))
     lock = threading.Lock()
@@ -187,9 +196,10 @@ def run_cases(
     def emit(event: dict) -> None:
         with lock:
             write_events(events, event)
+            run_status.on_event(event)
             progress.on_event(event)
             if remote and remote_id:
-                pending.append(_public_event(event))
+                pending.append(public_event(event))
                 if len(pending) >= 20:
                     try:
                         flush_remote()
@@ -204,38 +214,53 @@ def run_cases(
             try:
                 pack.stack_up()
             except RuntimeError as exc:
+                run_status.finish("fail", str(exc))
                 print(exc, file=sys.stderr)
                 return 2
     started = time.time()
     results = []
+    interrupted = False
     try:
         if not soak:
             results = execute(chosen, dest, emit, iteration=0, mode=mode)
         else:
             budget = parse_duration(duration)
-            gap = parse_duration(pause) if pause else 0.0
+            gap = 0.0 if pause in {"", "0", "0s"} else parse_duration(pause)
             deadline = started + budget
             print(f"soak {fmt_dur(budget).strip()}  pause {fmt_dur(gap).strip()}  fail_fast={fail_fast}")
             n = 0
-            while time.time() < deadline:
+            while time.time() < deadline + run_status.paused_seconds:
+                if run_status.stop_requested():
+                    interrupted = True
+                    break
                 n += 1
-                left = deadline - time.time()
+                left = deadline + run_status.paused_seconds - time.time()
                 emit({"type": "note", "id": chosen[0].spec.id, "message": f"soak iter {n}  left {fmt_dur(left).strip()}"})
                 batch = execute(chosen, dest, emit, iteration=n, mode=mode)
                 results.extend(batch)
+                if run_status.stop_requested():
+                    interrupted = True
+                    break
                 if fail_fast and any(r.status == "fail" for r in batch):
                     break
-                if time.time() + gap >= deadline:
+                if time.time() + gap >= deadline + run_status.paused_seconds:
                     break
                 if gap > 0:
                     time.sleep(gap)
+    except StopRequested as exc:
+        results.extend(exc.results)
+        interrupted = True
     except KeyboardInterrupt:
+        interrupted = True
         print("interrupted", file=sys.stderr)
     if soak:
         for pack in involved:
             if pack.soak_teardown:
                 pack.soak_teardown(dest, emit, [c for c in chosen if c.spec.pack == pack.id])
     write_reports(dest, results, stamp, wall_s=time.time() - started)
+    failed = next((result for result in results if result.status == "fail"), None)
+    final = "interrupted" if interrupted else "fail" if failed or not results else "pass"
+    run_status.finish(final, failed.error if failed else "")
     progress.summary()
     print(f"report  {dest / 'report.html'}")
     print(f"json    {dest / 'report.json'}")
@@ -245,15 +270,14 @@ def run_cases(
             with lock:
                 flush_remote()
             report = json.loads((dest / "report.json").read_text())
-            status = "fail" if any(r.status == "fail" for r in results) else "pass"
-            if not results:
-                status = "interrupted"
-            remote.finish(remote_id, report, status)
+            remote.finish(remote_id, report, final)
             print(f"dash  {remote.browse_url(remote_id)}")
         except DashError as exc:
             print(exc, file=sys.stderr)
     if sys.stdout.isatty():
         print(f"{DIM}open the HTML report for the visual summary{RESET}")
+    if interrupted:
+        return 130
     return 0 if results and all(r.status != "fail" for r in results) else 1
 
 

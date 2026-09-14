@@ -16,16 +16,6 @@ def secrets_dir() -> Path:
     return Path.home() / ".argos"
 
 
-def workspace_root() -> Path:
-    env = os.environ.get("ARGOS_WORKSPACE")
-    if env:
-        return Path(env)
-    found = secrets_dir()
-    if found.name == "secrets":
-        return found.parent
-    return Path.cwd()
-
-
 def load_secrets() -> None:
     root = secrets_dir()
     if not root.is_dir():

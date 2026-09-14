@@ -4,6 +4,7 @@ from typing import Callable
 
 from argos.case import ONCE, Result, Spec
 from argos.pack import Pack, discover_packs, stamp
+from argos.run_status import StopRequested
 from argos.runner import CaseFn, run_one
 
 _PACKS: list[Pack] | None = None
@@ -73,12 +74,17 @@ def execute(
     for case in chosen:
         grouped.setdefault(case.spec.pack, []).append(case)
     results: list[Result] = []
-    for pack_id, cases in grouped.items():
-        pack = pack_named(pack_id)
-        if pack and pack.execute:
-            results.extend(pack.execute(cases, dest, emit, iteration, mode=mode))
-            continue
-        results.extend(run_one(case, dest, emit, iteration, mode=mode) for case in cases)
+    try:
+        for pack_id, cases in grouped.items():
+            pack = pack_named(pack_id)
+            if pack and pack.execute:
+                results.extend(pack.execute(cases, dest, emit, iteration, mode=mode))
+                continue
+            for case in cases:
+                results.append(run_one(case, dest, emit, iteration, mode=mode))
+    except StopRequested as exc:
+        exc.results = [*results, *exc.results]
+        raise
     return results
 
 

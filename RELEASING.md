@@ -11,7 +11,7 @@ Tag **`X.Y.Z`**（不带 `v`）触发 [`.github/workflows/release.yml`](.github/
 ## Everyday
 
 ```bash
-./scripts/release.sh 0.2.1
+./scripts/release.sh 0.3.0
 git push origin main --tags
 ```
 

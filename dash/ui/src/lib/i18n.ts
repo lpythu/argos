@@ -76,6 +76,19 @@ const zh = {
   interrupted: "中断",
   elapsed: "耗时",
   queries: "选择器",
+  group: "分组",
+  typical: "典型耗时",
+  mutex: "互斥",
+  conflict: "资源冲突",
+  preferAfter: "建议顺序",
+  estimated: "合计典型耗时",
+  steps: "步骤",
+  operations: "操作证据",
+  expected: "判定",
+  actual: "实际",
+  registered: "已登记",
+  cleanupOk: "清理成功",
+  cleanupFail: "清理失败",
 }
 
 const en = {
@@ -156,6 +169,19 @@ const en = {
   interrupted: "interrupted",
   elapsed: "elapsed",
   queries: "selectors",
+  group: "Group",
+  typical: "Typical",
+  mutex: "Mutex",
+  conflict: "Resource conflict",
+  preferAfter: "Prefer after",
+  estimated: "Estimated typical time",
+  steps: "Steps",
+  operations: "Evidence",
+  expected: "Expected",
+  actual: "Actual",
+  registered: "Registered",
+  cleanupOk: "Cleanup ok",
+  cleanupFail: "Cleanup failed",
 }
 
 const dict = navigator.language.toLowerCase().startsWith("zh") ? zh : en

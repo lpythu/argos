@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { api, type Catalog, type CatalogCase } from "@/lib/api"
+import { fmtDur } from "@/lib/fmt"
 import { t } from "@/lib/i18n"
 import { addPlan, togglePlan, usePlanIds } from "@/lib/plan"
 import { statusVariant } from "@/lib/status"
@@ -48,7 +49,7 @@ export function CasesPage() {
             ))}
           </Field>
           <Field value={group} onChange={(event) => setGroup(event.target.value)}>
-            <option value="all">group</option>
+            <option value="all">{t("group")}</option>
             {catalog.groups.map((item) => (
               <option key={item}>{item}</option>
             ))}
@@ -69,6 +70,8 @@ export function CasesPage() {
                 <th className="px-3 py-2 w-8" />
                 <th className="px-3 py-2">id</th>
                 <th className="px-3 py-2">{t("pack")}</th>
+                <th className="px-3 py-2">{t("typical")}</th>
+                <th className="px-3 py-2">{t("mutex")}</th>
                 <th className="px-3 py-2">{t("lastStatus")}</th>
                 <th className="px-3 py-2">{t("lastEnv")}</th>
                 <th className="px-3 py-2">{t("lastRun")}</th>
@@ -102,6 +105,8 @@ function CaseRow({ item, on }: { item: CatalogCase; on: boolean }) {
         {item.pack || "—"}
         {item.group ? <div className="text-xs text-muted-foreground">{item.group}</div> : null}
       </td>
+      <td className="px-3 py-2">{item.typical_s ? fmtDur(item.typical_s) : "—"}</td>
+      <td className="px-3 py-2">{item.mutex || (item.resources || []).join(", ") || "—"}</td>
       <td className="px-3 py-2">
         <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
       </td>

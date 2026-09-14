@@ -1,6 +1,5 @@
 import hashlib
 import hmac
-import os
 import secrets
 from uuid import UUID
 
@@ -67,7 +66,3 @@ def require_ingest(authorization: str = Header(default="")) -> None:
 async def get_user_by_login(db: AsyncSession, login: str) -> User | None:
     result = await db.execute(select(User).where(User.login == login))
     return result.scalar_one_or_none()
-
-
-def random_secret() -> str:
-    return os.urandom(16).hex()
