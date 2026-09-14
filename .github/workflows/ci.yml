@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+      - run: uv build
+      - run: |
+          uv venv
+          uv pip install dist/*.whl
+          .venv/bin/argos --help
+
+  dash-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dash/ui
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dash/ui/package-lock.json
+      - run: npm ci
+      - run: npm run build

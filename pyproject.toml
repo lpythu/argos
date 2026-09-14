@@ -1,0 +1,23 @@
+[project]
+name = "argospy"
+version = "0.2.2"
+description = "once / soak test framework"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Peiyang Li" }]
+dependencies = []
+
+[project.scripts]
+argos = "argos.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/lpythu/argos"
+Repository = "https://github.com/lpythu/argos"
+Issues = "https://github.com/lpythu/argos/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/argos"]
