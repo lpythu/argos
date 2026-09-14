@@ -1,14 +1,33 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Field } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { api, type Catalog } from "@/lib/api"
-import { copyText } from "@/lib/fmt"
+import { api, type Catalog, type CatalogCase } from "@/lib/api"
+import { copyText, fmtDur } from "@/lib/fmt"
 import { t } from "@/lib/i18n"
 import { buildCommand, clearPlan, togglePlan, usePlanIds } from "@/lib/plan"
+
+function planHints(selected: CatalogCase[]) {
+  const groups = new Map<string, string[]>()
+  for (const item of selected) {
+    const keys = [...new Set([item.mutex, ...(item.resources || [])].filter(Boolean))]
+    for (const key of keys) {
+      groups.set(key, [...(groups.get(key) || []), item.id])
+    }
+  }
+  return {
+    typical: selected.reduce((sum, item) => sum + (item.typical_s || 0), 0),
+    conflicts: [...groups.entries()].filter(([, ids]) => new Set(ids).size > 1),
+    after: selected.flatMap((item) =>
+      (item.prefer_after || [])
+        .filter((id) => selected.some((row) => row.id === id))
+        .map((id) => `${id} → ${item.id}`),
+    ),
+  }
+}
 
 export function PlanPage() {
   const ids = usePlanIds()
@@ -30,6 +49,7 @@ export function PlanPage() {
   }, [])
 
   const selected = catalog.cases.filter((item) => ids.includes(item.id))
+  const hints = useMemo(() => planHints(selected), [selected])
   const command = buildCommand({ ids, env, soak, duration, pause, failFast })
 
   async function copy() {
@@ -78,6 +98,23 @@ export function PlanPage() {
           </Button>
         </div>
         <pre className="overflow-x-auto rounded-lg bg-muted/60 p-3 text-xs">{ids.length ? command : t("emptyPlan")}</pre>
+        {selected.length ? (
+          <div className="space-y-1 text-sm">
+            <div>
+              {t("estimated")}: {fmtDur(hints.typical)}
+            </div>
+            {hints.conflicts.map(([key, items]) => (
+              <div key={key} className="text-destructive">
+                {t("conflict")}: {key} · {items.join(", ")}
+              </div>
+            ))}
+            {hints.after.length ? (
+              <div className="text-muted-foreground">
+                {t("preferAfter")}: {hints.after.join(" · ")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="space-y-3">
@@ -100,7 +137,11 @@ export function PlanPage() {
                 <li key={item.id} className="flex items-center justify-between gap-2">
                   <div>
                     <code>{item.id}</code>
-                    <div className="text-xs text-muted-foreground">{item.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.title}
+                      {item.mutex ? ` · ${item.mutex}` : ""}
+                      {item.typical_s ? ` · ${fmtDur(item.typical_s)}` : ""}
+                    </div>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => togglePlan(item.id)}>
                     {t("clear")}

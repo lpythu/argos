@@ -11,7 +11,7 @@ from argos.case import ONCE, Context, Fail, Result, Skip, Spec
 
 
 class CaseFn:
-    def __init__(self, spec: Spec, fn: Callable):
+    def __init__(self, spec: Spec, fn: Callable[[Context], None]):
         self.spec = spec
         self.fn = fn
 
@@ -55,6 +55,8 @@ def run_one(
         status = "fail"
         error = str(exc)
         ctx.write("traceback.txt", traceback.format_exc())
+    if status != "pass":
+        ctx.fail_running(error)
     elapsed = time.time() - started
     result = Result(
         spec=case.spec,
@@ -66,6 +68,10 @@ def run_one(
         notes=list(ctx.notes),
         dest=str(ctx.dest),
         iteration=iteration,
+        metric_meta=dict(ctx.metric_meta),
+        samples=dict(ctx.samples),
+        distributions=dict(ctx.distributions),
+        thresholds=list(ctx.thresholds),
     )
     ctx.write(
         "result.json",
@@ -79,6 +85,10 @@ def run_one(
             "elapsed_s": round(elapsed, 3),
             "error": error,
             "metrics": result.metrics,
+            "metric_meta": result.metric_meta,
+            "samples": result.samples,
+            "distributions": result.distributions,
+            "thresholds": result.thresholds,
             "steps": [s.__dict__ for s in result.steps],
             "notes": result.notes,
         },
@@ -143,7 +153,7 @@ def run_packed(
     return [r for r in results if r is not None]
 
 
-def write_events(path: Path, event: dict) -> None:
+def public_event(event: dict) -> dict:
     row = {k: v for k, v in event.items() if k != "result"}
     if "result" in event:
         result: Result = event["result"]
@@ -151,6 +161,10 @@ def write_events(path: Path, event: dict) -> None:
         row["elapsed_s"] = result.elapsed_s
         row["error"] = result.error
         row["iteration"] = result.iteration
+    return row
+
+
+def write_events(path: Path, event: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+        fh.write(json.dumps(public_event(event), ensure_ascii=False, default=str) + "\n")

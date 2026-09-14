@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -16,25 +17,24 @@ from skill import default_origin, render_skill
 
 UI = Path(__file__).resolve().parent / "ui" / "dist"
 
-app = FastAPI(title="argos dash")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    data_root().mkdir(parents=True, exist_ok=True)
+    password = admin_password()
+    if password:
+        async with Session() as db:
+            count = await db.scalar(select(func.count()).select_from(User))
+            if not count and await get_user_by_login(db, admin_user()) is None:
+                db.add(User(login=admin_user(), name=admin_user(), password_hash=hash_password(password)))
+                await db.commit()
+    yield
+
+
+app = FastAPI(title="argos dash", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(runs_router)
 app.include_router(comments_router)
-
-
-@app.on_event("startup")
-async def startup() -> None:
-    data_root().mkdir(parents=True, exist_ok=True)
-    password = admin_password()
-    if not password:
-        return
-    async with Session() as db:
-        count = await db.scalar(select(func.count()).select_from(User))
-        if count:
-            return
-        if await get_user_by_login(db, admin_user()) is None:
-            db.add(User(login=admin_user(), name=admin_user(), password_hash=hash_password(password)))
-            await db.commit()
 
 
 @app.get("/health")

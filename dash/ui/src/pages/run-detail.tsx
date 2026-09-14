@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { api, type Comment, type EventRow, type Run } from "@/lib/api"
+import { api, type Comment, type EventRow, type Operation, type Run } from "@/lib/api"
 import { fmtDur, fmtWhen, metricValue } from "@/lib/fmt"
 import { t } from "@/lib/i18n"
 import { statusVariant } from "@/lib/status"
@@ -189,14 +189,25 @@ export function RunDetailPage() {
               <IterStrip items={selected.iterations} />
               {selected.latest_error ? <p className="text-sm text-destructive">{selected.latest_error}</p> : null}
               {selected.steps?.length ? (
-                <ul className="space-y-1 text-sm">
-                  {selected.steps.map((step) => (
-                    <li key={step.name}>
-                      <Badge variant={statusVariant(step.status)}>{step.status}</Badge> {step.name}
-                      {step.detail ? <span className="text-muted-foreground"> · {step.detail}</span> : null}
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">{t("steps")}</h3>
+                  <ul className="space-y-2 text-sm">
+                    {selected.steps.map((step) => (
+                      <li key={step.name} className="rounded-lg bg-muted/40 p-2">
+                        <div>
+                          <Badge variant={statusVariant(step.status)}>{step.status}</Badge> {step.name}
+                          {step.elapsed_s != null ? (
+                            <span className="text-muted-foreground"> · {fmtDur(step.elapsed_s)}</span>
+                          ) : null}
+                          {step.detail ? <span className="text-muted-foreground"> · {step.detail}</span> : null}
+                        </div>
+                        {(step.operations || []).map((operation, index) => (
+                          <OperationBlock key={`${step.name}-${index}`} operation={operation} />
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               <h3 className="text-sm font-medium">{t("metrics")}</h3>
               {Object.keys(selected.metrics || {}).length ? (
@@ -253,16 +264,16 @@ export function RunDetailPage() {
           <CardTitle>{t("resource")}</CardTitle>
           <div className="grid grid-cols-3 gap-2 text-sm">
             <div>
-              <div className="text-xs text-muted-foreground">registered</div>
+              <div className="text-xs text-muted-foreground">{t("registered")}</div>
               <div className="text-lg font-medium">{String(audit.registered ?? 0)}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">cleanup ok</div>
-              <div className="text-lg font-medium">{String(audit.cleanup_completed ?? 0)}</div>
+              <div className="text-xs text-muted-foreground">{t("cleanupOk")}</div>
+              <div className="text-lg font-medium">{String(audit.cleanup_completed ?? audit.completed ?? 0)}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">cleanup fail</div>
-              <div className="text-lg font-medium">{String(audit.cleanup_failed ?? 0)}</div>
+              <div className="text-xs text-muted-foreground">{t("cleanupFail")}</div>
+              <div className="text-lg font-medium">{String(audit.cleanup_failed ?? audit.failed ?? 0)}</div>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">{String(audit.cleanup_status || "—")}</p>
@@ -343,6 +354,31 @@ export function RunDetailPage() {
         </form>
       </Card>
     </div>
+  )
+}
+
+function pretty(value: unknown): string {
+  if (value == null) return "—"
+  if (typeof value === "string") return value
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function OperationBlock({ operation }: { operation: Operation }) {
+  return (
+    <details className="mt-2 rounded-md border border-border bg-background p-2">
+      <summary className="cursor-pointer text-xs font-medium">
+        {t("operations")} · {operation.label || operation.type || "op"}
+      </summary>
+      <pre className="mt-2 overflow-auto text-xs text-muted-foreground">
+        {t("expected")}: {pretty(operation.expected)}
+        {"\n"}
+        {t("actual")}: {pretty(operation.actual)}
+      </pre>
+    </details>
   )
 }
 

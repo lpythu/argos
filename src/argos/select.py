@@ -30,4 +30,12 @@ def matches(spec: Spec, query: str) -> bool:
 def select(specs: list[Spec], queries: list[str]) -> list[Spec]:
     if not queries:
         return list(specs)
-    return [spec for spec in specs if all(matches(spec, query) for query in queries)]
+    seen: set[str] = set()
+    out: list[Spec] = []
+    for query in queries:
+        for spec in specs:
+            if spec.id in seen or not matches(spec, query):
+                continue
+            seen.add(spec.id)
+            out.append(spec)
+    return out

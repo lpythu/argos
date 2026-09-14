@@ -165,13 +165,34 @@ async def post_events(run_id: UUID, body: EventsBody, db: AsyncSession = Depends
             elif kind == "step":
                 steps = list(row.steps or [])
                 name = str(event.get("name") or "")
-                item = {"name": name, "status": event.get("status") or "", "detail": event.get("detail") or ""}
+                item = {
+                    "name": name,
+                    "status": event.get("status") or "",
+                    "detail": event.get("detail") or "",
+                    "started_at": event.get("started_at") or "",
+                    "ended_at": event.get("ended_at") or "",
+                    "elapsed_s": event.get("elapsed_s"),
+                    "operations": list(event.get("operations") or []),
+                }
                 for i, existing in enumerate(steps):
                     if existing.get("name") == name:
+                        if not item["operations"] and existing.get("operations"):
+                            item["operations"] = existing["operations"]
                         steps[i] = item
                         break
                 else:
                     steps.append(item)
+                row.steps = steps
+            elif kind == "operation":
+                steps = list(row.steps or [])
+                step_name = str(event.get("step") or "")
+                payload = event.get("operation") if isinstance(event.get("operation"), dict) else {}
+                for existing in steps:
+                    if existing.get("name") == step_name or (not step_name and existing.get("status") == "running"):
+                        ops = list(existing.get("operations") or [])
+                        ops.append(payload)
+                        existing["operations"] = ops
+                        break
                 row.steps = steps
             elif kind == "metric":
                 metrics = dict(row.metrics or {})

@@ -25,8 +25,28 @@ export type CaseRow = {
   status: string
   error: string
   elapsed_s: number
-  steps: { name: string; status: string; detail: string }[]
+  steps: Step[]
   metrics: Record<string, unknown>
+}
+
+export type Operation = {
+  label?: string
+  type?: string
+  operation?: unknown
+  expected?: unknown
+  actual?: unknown
+  artifacts?: string[]
+  elapsed_s?: number
+}
+
+export type Step = {
+  name: string
+  status: string
+  detail: string
+  started_at?: string
+  ended_at?: string
+  elapsed_s?: number | null
+  operations?: Operation[]
 }
 
 export type CaseSummary = {
@@ -49,7 +69,7 @@ export type CaseSummary = {
   metric_meta: Record<string, { unit?: string }>
   distributions: Record<string, { p95?: number; avg?: number; max?: number; unit?: string }>
   thresholds: { name: string; passed: boolean; actual: unknown; target: unknown; operator: string; unit?: string }[]
-  steps: { name: string; status: string; detail: string }[]
+  steps: Step[]
 }
 
 export type CatalogCase = {
@@ -64,6 +84,12 @@ export type CatalogCase = {
   run_id: string
   run_slug: string
   seen_at: string
+  typical_s: number
+  mutex: string
+  resources: string[]
+  prefer_after: string[]
+  modes: string[]
+  tags: string[]
 }
 
 export type Artifact = { path: string; size: number }

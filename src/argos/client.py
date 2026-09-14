@@ -73,7 +73,7 @@ class Client:
 def push_dir(client: Client, dest: Path) -> str:
     run_meta = _read_json(dest / "run.json")
     report = _read_json(dest / "report.json")
-    created = client.create_run({**run_meta, "status": "done"})
+    created = client.create_run({**run_meta, "status": "running"})
     run_id = str(created["id"])
     events_path = dest / "events.jsonl"
     if events_path.is_file():
