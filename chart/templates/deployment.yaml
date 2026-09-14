@@ -1,0 +1,95 @@
+{{- range $key, $w := .Values.workloads }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $w.name }}
+  namespace: {{ default $.Values.namespace $w.namespace }}
+  labels:
+    app: {{ $w.name }}
+spec:
+  replicas: {{ default $.Values.replicas $w.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: {{ $w.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $w.name }}
+      {{- if $.Values.secret }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") $ | sha256sum }}
+      {{- end }}
+    spec:
+      {{- if $.Values.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $.Values.image.pullSecret }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: {{ $w.name }}
+          image: "{{ default $.Values.image.repository $w.imageRepository }}:{{ default $.Values.image.tag $w.tag | default "latest" }}"
+          imagePullPolicy: Always
+          {{- if $.Values.secret }}
+          envFrom:
+            - secretRef:
+                name: {{ default (printf "%s-env" $.Release.Name) $.Values.secretName }}
+          {{- end }}
+          env:
+            {{- range $ek, $ev := $w.env }}
+            - name: {{ $ek }}
+              value: {{ $ev | quote }}
+            {{- end }}
+          ports:
+            - name: {{ default "http" $w.portName }}
+              containerPort: {{ $w.port }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          startupProbe:
+            httpGet:
+              path: {{ default "/health" $w.healthPath }}
+              port: {{ default "http" $w.portName }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: {{ default "/health" $w.healthPath }}
+              port: {{ default "http" $w.portName }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: {{ default "/health" $w.healthPath }}
+              port: {{ default "http" $w.portName }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+      volumes:
+        - name: data
+          hostPath:
+            path: {{ default "/data/argos" $w.dataPath }}
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $w.name }}
+  namespace: {{ default $.Values.namespace $w.namespace }}
+  labels:
+    app: {{ $w.name }}
+spec:
+  selector:
+    app: {{ $w.name }}
+  ports:
+    - name: {{ default "http" $w.portName }}
+      port: {{ $w.port }}
+      targetPort: {{ default "http" $w.portName }}
+{{- end }}
