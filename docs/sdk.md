@@ -126,6 +126,8 @@ demo = "mypack.pack:pack"
 
 `--dash` with no value uses `ARGOS_DASH_URL` + `ARGOS_TOKEN` or discovered `secrets/dash.env`. Path argument loads both keys from that file. URL argument sets origin; token still from env/file.
 
+Terminal progress and `out/` layout: https://lpythu.github.io/argos/local/
+
 ## Exceptions
 
 - `argos.case.Skip` — skipped result  

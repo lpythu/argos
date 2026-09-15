@@ -38,7 +38,9 @@ argos run <id> --env office
 argos run <id> --soak --for 8h --pause 2m
 ```
 
-Selectors: exact id, `pack:`, `group:`, `tag:`, `mode:once|soak`, glob. Cases tagged `e2e` require `--env`. Output: `./out/<stamp>__<slug>/` (or `ARGOS_OUT`).
+Selectors: exact id, `pack:`, `group:`, `tag:`, `mode:once|soak`, glob. Cases tagged `e2e` require `--env`.
+
+During / after a run: terminal progress + `out/<stamp>__<slug>/` reports — see https://lpythu.github.io/argos/local/ (or [local.md](local.md)).
 
 ## Optional: stream to dash
 
