@@ -7,6 +7,9 @@ const outDir = path.resolve(import.meta.dirname, "../../src/argos/static/report"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
@@ -17,6 +20,7 @@ export default defineConfig({
     emptyOutDir: true,
     cssCodeSplit: false,
     assetsInlineLimit: 1_000_000,
+    minify: true,
     lib: {
       entry: path.resolve(import.meta.dirname, "src/report/main.tsx"),
       name: "ArgosReport",
