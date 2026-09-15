@@ -34,6 +34,8 @@ jobs:
             echo "::error::Tag $TAG must match pyproject.toml, dash/pyproject.toml, and chart/Chart.yaml"
             exit 1
           fi
+          test -f src/argos/static/report/viewer.js
+          test -f src/argos/static/report/viewer.css
 
       - uses: astral-sh/setup-uv@v10.1.0
         with:

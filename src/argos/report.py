@@ -1,17 +1,16 @@
 """Structured common report renderer used by every Argos case."""
 
 import copy
-import html
 import json
 import re
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote
 
 from argos.case import Result
 from argos.term import fmt_dur
 
+_STATIC_REPORT = Path(__file__).resolve().parent / "static" / "report"
 _ITER_DIR = re.compile(r"^(.+)__(\d{4})$")
 _UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b", re.I)
 _HEX_RE = re.compile(r"\b[0-9a-f]{12,}\b", re.I)
@@ -190,26 +189,6 @@ def _success_rate(data: dict) -> float | None:
     return 100 * int(data.get("passed") or 0) / completed if completed else None
 
 
-def _display_time(value: object) -> str:
-    text = str(value or "")
-    match = re.fullmatch(r"(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})", text)
-    if match:
-        return f"{match[1]}-{match[2]}-{match[3]} {match[4]}:{match[5]}:{match[6]}"
-    try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        return text or "—"
-
-
-def _size(value: int) -> str:
-    size = float(value)
-    for unit in ("B", "KiB", "MiB", "GiB"):
-        if size < 1024 or unit == "GiB":
-            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{value} B"
-
-
 def markdown(payload: dict) -> str:
     data = enrich_payload(payload)
     rate = _success_rate(data)
@@ -248,14 +227,6 @@ def markdown(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _artifact_href(path: str, artifact_base: str) -> str:
-    return f"{artifact_base}{quote(path)}" if artifact_base else quote(path)
-
-
-def _pretty(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, indent=2, default=str) if isinstance(value, (dict, list)) else str(value or "—")
-
-
 def _operation_passed(operation: dict) -> bool:
     expected = operation.get("expected") if isinstance(operation.get("expected"), dict) else {}
     actual = operation.get("actual") if isinstance(operation.get("actual"), dict) else {}
@@ -266,13 +237,6 @@ def _operation_passed(operation: dict) -> bool:
         wanted, received = expected.get("http_status"), actual.get("http_status")
         return received in wanted if isinstance(wanted, (list, tuple)) else received == wanted
     return expected == actual
-
-
-def _artifact_links(operation: dict, artifact_base: str) -> str:
-    return "".join(
-        f"<a href='{html.escape(_artifact_href(str(path), artifact_base), quote=True)}' target='_blank'>{html.escape(Path(str(path)).name)}</a>"
-        for path in operation.get("artifacts") or []
-    )
 
 
 def _command_text(value: object) -> str:
@@ -288,80 +252,34 @@ def _command_text(value: object) -> str:
     return shlex.join(masked)
 
 
-def _command_html(operation: dict, artifact_base: str) -> str:
-    actual = operation.get("actual") if isinstance(operation.get("actual"), dict) else {}
-    command = operation.get("operation") if isinstance(operation.get("operation"), dict) else {}
-    passed = _operation_passed(operation)
-    status = "成功" if passed else "失败"
-    css = "ok" if passed else "failed"
-    opened = "" if passed else " open"
-    stdout = str(actual.get("stdout") or actual.get("output") or "")
-    stderr = str(actual.get("stderr") or "")
-    elapsed = operation.get("elapsed_s")
-    links = _artifact_links(operation, artifact_base)
-    legacy = ""
-    output = "".join([
-        f"<div><span>返回码</span><pre>{html.escape(str(actual.get('returncode', '未记录')))}</pre></div>",
-        f"<div><span>stdout</span><pre>{html.escape(stdout or '—')}</pre></div>",
-        f"<div class='actual'><span>stderr</span><pre>{html.escape(stderr or '—')}</pre></div>",
-    ])
-    return f"<details class='operation command'{opened}><summary><span class='st {css}'>{status}</span> <b>{html.escape(str(operation.get('label') or 'Command'))}</b> {legacy}<code>$ {html.escape(_command_text(command.get('command')))}</code></summary><div class='command-output'>{output}</div><div class='command-meta'>{f'耗时：{html.escape(fmt_dur(float(elapsed)))}' if elapsed is not None else ''}{f' 完整日志：{links}' if links else ''}</div></details>"
-
-
-def _operation_html(operation: dict, artifact_base: str) -> str:
-    if operation.get("type") == "command":
-        return _command_html(operation, artifact_base)
-    label = html.escape(str(operation.get("label") or "操作"))
-    kind = html.escape(str(operation.get("type") or "operation"))
-    request = html.escape(_pretty(operation.get("operation")))
-    expected = html.escape(_pretty(operation.get("expected")))
-    actual = html.escape(_pretty(operation.get("actual")))
-    links = _artifact_links(operation, artifact_base)
-    legacy = ""
-    passed = _operation_passed(operation)
-    return f"<details class='operation'{' open' if not passed else ''}><summary><span class='st {'ok' if passed else 'failed'}'>{'成功' if passed else '失败'}</span> <b>{label}</b> <span class='chip'>{kind}</span>{legacy}</summary><div class='evidence-grid'><div><span>请求</span><pre>{request}</pre></div><div><span>判定规则</span><pre>{expected}</pre></div><div class='actual'><span>响应</span><pre>{actual}</pre></div></div>{f'<div class="evidence-links">证据文件：{links}</div>' if links else ''}</details>"
-
-
-def _case_anchor(case_id: object, iteration: object) -> str:
-    return "case-" + re.sub(r"[^a-zA-Z0-9_-]+", "-", f"{case_id}-{iteration}").strip("-")
-
-
-def html_doc(payload: dict, *, artifact_base: str = "") -> str:
+def html_doc(payload: dict) -> str:
+    """Self-contained HTML shell: dash ReportView (prebuilt) + embedded report.json."""
     data = enrich_payload(payload)
-    cases, cleanup = data["cases"], data["cleanup"]
-    errors, rate = _error_groups(cases), _success_rate(data)
-    status_label = {"pass": "通过", "fail": "失败", "skip": "跳过", "interrupted": "中断"}.get(data["status"], data["status"])
-    cleanup_label = {"pass": "成功", "fail": "失败", "unknown": "未涉及"}.get(cleanup["status"], cleanup["status"])
-    planned = data.get("duration") or ("历史记录未记录" if data.get("mode") == "soak" else "单轮")
-    top_error = errors[0] if errors else None
-    conclusion = f"主要问题：{top_error['message']}，共出现 {top_error['count']} 次。" if top_error else "所有已完成轮次均未发现失败。"
-    conclusion += f" 有 {cleanup['failed']} 个清理阶段失败。" if cleanup["status"] == "fail" else " 已记录的资源清理均成功。" if cleanup["status"] == "pass" else ""
-    representative_keys = {
-        (row["representative_case"], row["representative_iteration"])
-        for row in errors
-    }
-    error_rows = "".join(
-        f"<tr><td>{html.escape(row['message'])}</td><td><code>{html.escape('、'.join(row['cases']))}</code></td><td class='num'>{row['count']}</td><td>{html.escape('、'.join(map(str,row['iterations'])))}</td><td><a href='#{_case_anchor(row['representative_case'], row['representative_iteration'])}'>查看代表失败</a></td></tr>"
-        for row in errors
-    )
-    blocks = []
-    for case in cases:
-        metrics = "".join(f'<span class="chip">{html.escape(str(k))}={html.escape(str(v))}</span>' for k,v in (case.get("metrics") or {}).items()) or '<span class="muted">无指标</span>'
-        step_rows = "".join(
-            f"<tr><td>{html.escape(str(s.get('name') or ''))}</td><td><span class='st {html.escape(str(s.get('status') or ''))}'>{html.escape(step_status(s,case))}</span></td><td class='num'>{html.escape(fmt_dur(s['elapsed_s']) if s.get('elapsed_s') is not None else '—')}</td><td>{html.escape(str(s.get('detail') or ''))}{''.join(_operation_html(op, artifact_base) for op in s.get('operations') or [] if isinstance(op,dict)) if s.get('status') in {'failed','running'} and case.get('status') in {'fail','interrupted'} else ''}</td></tr>"
-            for s in case.get("steps") or []
+    css_path = _STATIC_REPORT / "viewer.css"
+    js_path = _STATIC_REPORT / "viewer.js"
+    if not css_path.is_file() or not js_path.is_file():
+        raise FileNotFoundError(
+            f"missing report viewer at {_STATIC_REPORT}; run: npm run build:report (in dash/ui)"
         )
-        notes = "".join(f"<li>{html.escape(str(note))}</li>" for note in case.get("notes") or [])
-        error = f"<div class='error-box'>{html.escape(str(case.get('error')))}</div>" if case.get("error") else ""
-        case_key = (str(case.get("id") or ""), int(case.get("iteration") or 1))
-        opened = " open" if case_key in representative_keys or case.get("status") == "interrupted" else ""
-        blocks.append(f"<details id='{_case_anchor(*case_key)}' class='iteration'{opened}><summary><span class='st {html.escape(str(case.get('status') or ''))}'>{html.escape(str(case.get('status') or ''))}</span> <b>{html.escape(str(case.get('id') or ''))}</b> · 第 {case.get('iteration') or 1} 轮 <span class='summary-time'>{html.escape(fmt_dur(float(case.get('elapsed_s') or 0)))}</span></summary><div class='iteration-body'>{error}<div class='metrics'>{metrics}</div><table><thead><tr><th>阶段</th><th>状态</th><th>耗时</th><th>说明与失败操作</th></tr></thead><tbody>{step_rows}</tbody></table>{f'<h4>备注与清理结果</h4><ul>{notes}</ul>' if notes else ''}</div></details>")
-    artifact_rows = "".join(f"<tr><td><a href='{html.escape(_artifact_href(row['path'],artifact_base),quote=True)}' target='_blank'>{html.escape(row['path'])}</a></td><td class='num'>{html.escape(_size(int(row['bytes'])))}</td></tr>" for row in data.get("artifacts") or [])
-    total = max(1, data["passed"]+data["failed"]+data["skipped"]+data["interrupted"])
-    queries = "、".join(map(str, data.get("queries") or []))
-    return f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Argos 测试报告</title><style>
-:root{{color-scheme:dark;--bg:#0d1319;--panel:#18212b;--line:#2b3947;--text:#e8eef4;--muted:#91a0af;--green:#42d392;--red:#ff7171;--yellow:#f4c95d;--blue:#62b6ff}}*{{box-sizing:border-box}}body{{font:14px/1.5 ui-sans-serif,system-ui;margin:0;background:var(--bg);color:var(--text)}}main{{max-width:1440px;margin:auto;padding:28px}}h1,h2,h4{{margin-top:0}}h2{{font-size:17px;margin-bottom:14px}}.header{{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}}.header h1{{margin-bottom:5px}}.badge,.chip{{display:inline-block;border-radius:999px;padding:3px 9px;background:#263443;margin:0 5px 5px 0;font-size:12px}}.badge{{font-weight:700}}.badge.pass,.good,.st.ok,.st.pass{{color:var(--green)}}.badge.fail,.bad,.st.failed,.st.fail{{color:var(--red)}}.badge.interrupted,.st.interrupted,.st.skip{{color:var(--yellow)}}.meta,.cards{{display:grid;gap:10px}}.meta{{grid-template-columns:repeat(6,minmax(120px,1fr));margin:18px 0}}.meta div,.card,.section{{background:var(--panel);border:1px solid var(--line);border-radius:12px}}.meta div{{padding:11px 13px}}.meta b,.meta span{{display:block}}.meta span,.muted,.sub{{color:var(--muted);font-size:12px}}.cards{{grid-template-columns:repeat(6,minmax(105px,1fr));margin:12px 0 16px}}.card{{padding:13px 15px}}.card b{{display:block;font-size:24px}}.bar{{display:flex;height:8px;overflow:hidden;border-radius:99px;background:#25313d;margin-bottom:18px}}.bar i{{display:block}}.bar .p{{width:{100*data['passed']/total:.2f}%;background:var(--green)}}.bar .f{{width:{100*data['failed']/total:.2f}%;background:var(--red)}}.bar .s{{width:{100*data['skipped']/total:.2f}%;background:var(--yellow)}}.bar .i{{width:{100*data['interrupted']/total:.2f}%;background:#9b87f5}}.section{{padding:18px;margin:14px 0}}.conclusion{{border-left:4px solid {'var(--red)' if errors else 'var(--green)'};font-size:15px}}table{{width:100%;border-collapse:collapse}}th,td{{padding:9px 11px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}}th{{color:var(--muted);font-weight:600}}.num{{font-variant-numeric:tabular-nums}}.st{{text-transform:uppercase;font-weight:750}}.iteration{{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:9px 0;overflow:hidden;scroll-margin-top:12px}}summary{{padding:13px 15px;cursor:pointer}}.summary-time{{float:right;color:var(--muted)}}.iteration-body{{padding:0 15px 15px}}.metrics{{margin:10px 0}}.error-box{{background:#3a2026;color:#ffc1c1;border-radius:8px;padding:10px 12px;margin:8px 0 12px;white-space:pre-wrap}}.operation{{margin:8px 0;border:1px solid var(--line);border-radius:8px;background:#111922}}.operation summary{{padding:8px 10px}}.command summary code{{display:block;margin:6px 0 0;color:#dce7f0;white-space:pre-wrap;word-break:break-word}}.command-output{{display:grid;grid-template-columns:.45fr 1fr 1.4fr;gap:8px;padding:0 10px 10px}}.command-output span,.evidence-grid span{{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}}.command-meta{{padding:0 10px 10px;color:var(--muted)}}.evidence-grid{{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;padding:0 10px 10px}}.evidence-grid>div,.command-output>div{{min-width:0}}pre{{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#0a1016;border-radius:6px;padding:8px;color:#dce7f0}}.actual pre,.command.failed .actual pre{{color:#ffc1c1}}.evidence-links{{padding:0 10px 10px}}.evidence-links a,.command-meta a{{margin-left:8px}}.artifacts>summary h2{{display:inline;margin:0}}a{{color:var(--blue)}}ul{{margin-bottom:0}}@media(max-width:900px){{main{{padding:16px}}.header{{display:block}}.meta,.cards{{grid-template-columns:repeat(2,1fr)}}.section{{overflow:auto}}.evidence-grid,.command-output{{grid-template-columns:1fr}}}}
-</style></head><body><main><div class="header"><div><h1>Argos 测试报告</h1><div class="sub">{html.escape(queries)}</div></div><span class="badge {html.escape(data['status'])}">{html.escape(status_label)}</span></div><div class="meta"><div><span>环境</span><b>{html.escape(str(data.get('env') or '—'))}</b></div><div><span>模式</span><b>{html.escape(str(data.get('mode') or '—'))}</b></div><div><span>开始时间</span><b>{html.escape(_display_time(data.get('started')))}</b></div><div><span>结束时间</span><b>{html.escape(_display_time(data.get('finished_at')))}</b></div><div><span>运行耗时</span><b>{html.escape(fmt_dur(float(data.get('elapsed_s') or 0)))}</b></div><div><span>计划时长</span><b>{html.escape(str(planned))}</b></div></div><div class="cards"><div class="card good"><b>{data['passed']}</b>通过</div><div class="card bad"><b>{data['failed']}</b>失败</div><div class="card"><b>{data['skipped']}</b>跳过</div><div class="card"><b>{data['interrupted']}</b>中断</div><div class="card"><b>{'—' if rate is None else f'{rate:.1f}%'}</b>成功率</div><div class="card"><b>{html.escape(str(cleanup_label))}</b>清理状态</div></div><div class="bar"><i class="p"></i><i class="f"></i><i class="s"></i><i class="i"></i></div><section class="section conclusion"><h2>关键结论</h2>{html.escape(conclusion)}</section><section class="section"><h2>错误聚合</h2>{f'<table><thead><tr><th>错误指纹</th><th>影响用例</th><th>次数</th><th>轮次</th><th>操作</th></tr></thead><tbody>{error_rows}</tbody></table>' if error_rows else '<div class="muted">没有失败或中断记录</div>'}</section><section class="section"><h2>轮次详情</h2>{''.join(blocks)}</section><section class="section"><h2>清理结果</h2><div class="cards"><div class="card"><b>{cleanup['completed']}</b>清理成功</div><div class="card"><b>{cleanup['failed']}</b>清理失败</div></div></section><details class="section artifacts"><summary><h2>查看全部产物</h2></summary>{f'<table><thead><tr><th>文件</th><th>大小</th></tr></thead><tbody>{artifact_rows}</tbody></table>' if artifact_rows else '<div class="muted">没有可展示的产物</div>'}</details></main></body></html>"""
+    css = css_path.read_text(encoding="utf-8")
+    js = js_path.read_text(encoding="utf-8")
+    payload_json = json.dumps(data, ensure_ascii=False, default=str).replace("<", "\\u003c")
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="zh-CN">\n'
+        "<head>\n"
+        '<meta charset="utf-8"/>\n'
+        '<meta name="viewport" content="width=device-width,initial-scale=1"/>\n'
+        "<title>Argos 测试报告</title>\n"
+        f"<style>{css}</style>\n"
+        "</head>\n"
+        '<body class="min-h-svh bg-background text-foreground antialiased">\n'
+        '<div id="root"></div>\n'
+        f'<script type="application/json" id="argos-report">{payload_json}</script>\n'
+        f"<script>{js}</script>\n"
+        "</body>\n"
+        "</html>\n"
+    )
 
 
 def step_status(step: dict, case: dict) -> str:

@@ -37,3 +37,11 @@ def load_secrets() -> None:
 def apply_presets(presets: dict[str, str]) -> None:
     for key, value in presets.items():
         os.environ[key] = value
+
+
+def workspace_root() -> Path:
+    """Saidc workspace root: parent of secrets/ when found by walking up cwd."""
+    root = secrets_dir()
+    if root.name == "secrets":
+        return root.parent
+    return Path.cwd().resolve()

@@ -5,6 +5,7 @@ import { CasesPage } from "@/pages/cases"
 import { HomePage } from "@/pages/home"
 import { LoginPage } from "@/pages/login"
 import { PlanPage } from "@/pages/plan"
+import { ReportPage } from "@/pages/report"
 import { RunDetailPage } from "@/pages/run-detail"
 import { RunsPage } from "@/pages/runs"
 import { AppShell } from "@/pages/shell"
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
+          <Route path="/runs/:id/report" element={<ReportPage />} />
           <Route path="/cli" element={<CliPage />} />
           <Route path="/skill" element={<SkillPage />} />
         </Route>
