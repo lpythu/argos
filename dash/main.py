@@ -11,6 +11,7 @@ from config import admin_password, admin_user, data_root
 from database import Session
 from models import User
 from routers.auth import router as auth_router
+from routers.cli import router as cli_router
 from routers.comments import router as comments_router
 from routers.runs import router as runs_router
 from skill import default_origin, render_skill
@@ -33,6 +34,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="argos dash", lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(cli_router)
 app.include_router(runs_router)
 app.include_router(comments_router)
 

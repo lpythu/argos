@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
+import { CliPage } from "@/pages/cli"
 import { CasesPage } from "@/pages/cases"
 import { HomePage } from "@/pages/home"
 import { LoginPage } from "@/pages/login"
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
+          <Route path="/cli" element={<CliPage />} />
           <Route path="/skill" element={<SkillPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
