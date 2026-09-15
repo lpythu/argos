@@ -35,7 +35,7 @@ argos run <id> --env office          # e2e cases need --env
 argos run <id> --soak --for 8h
 ```
 
-Artifacts: `./out/<stamp>__<slug>/` (override with `ARGOS_OUT`).
+While running, the terminal shows case banners, steps, and PASS/FAIL. When finished, open `out/<stamp>__<slug>/report.html` (also `report.md` / `report.json`). Details and examples: [Local run](https://lpythu.github.io/argos/local/).
 
 ### B — Stream to a dash instance (optional)
 
@@ -104,6 +104,7 @@ New product pack: `pack.py` exporting `pack() -> Pack`, plus `[project.entry-poi
 |---|---|
 | This README | Human / agent overview |
 | Agent contract | https://lpythu.github.io/argos/skill.md |
+| Terminal & `out/` | https://lpythu.github.io/argos/local/ |
 | Python API | https://lpythu.github.io/argos/sdk.md |
 | Connect *this* dash | `https://<dash>/cli` and `https://<dash>/skill.md` |
 

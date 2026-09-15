@@ -17,6 +17,7 @@ theme:
 nav:
   - Home: index.md
   - Agent skill: skill.md
+  - Local run: local.md
   - SDK: sdk.md
 markdown_extensions:
   - admonition
