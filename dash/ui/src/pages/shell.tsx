@@ -11,6 +11,7 @@ const links = [
   { to: "/cases", label: t("cases") },
   { to: "/plan", label: t("plan") },
   { to: "/runs", label: t("runs") },
+  { to: "/cli", label: t("cli") },
   { to: "/skill", label: t("skill") },
 ]
 

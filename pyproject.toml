@@ -11,7 +11,8 @@ dependencies = []
 argos = "argos.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/lpythu/argos"
+Homepage = "https://lpythu.github.io/argos/"
+Documentation = "https://lpythu.github.io/argos/"
 Repository = "https://github.com/lpythu/argos"
 Issues = "https://github.com/lpythu/argos/issues"
 

@@ -63,6 +63,6 @@ export function buildCommand(opts: {
     if (opts.pause && opts.pause !== "0s") parts.push("--pause", opts.pause)
   }
   if (opts.failFast) parts.push("--fail-fast")
-  parts.push("--push")
+  parts.push("--dash")
   return parts.join(" ")
 }

@@ -2,24 +2,95 @@ import json
 import os
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
-DEFAULT_DASH = "https://argos.saidc.ai"
+from argos.secrets import secrets_dir
+
+
+@dataclass(frozen=True)
+class DashConfig:
+    url: str
+    token: str
+
+
+class DashError(RuntimeError):
+    pass
+
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith("#") or "=" not in raw:
+            continue
+        key, _, value = raw.partition("=")
+        key = key.strip()
+        if key:
+            out[key] = value.strip().strip("'").strip('"')
+    return out
+
+
+def _discover_dash_env() -> Path | None:
+    root = secrets_dir()
+    for name in ("dash.env", "argos.env"):
+        path = root / name
+        if path.is_file():
+            return path
+    home = Path.home() / ".argos" / "dash.env"
+    if home.is_file():
+        return home
+    return None
+
+
+def resolve_dash(spec: str | None) -> DashConfig:
+    """Resolve dash URL + token from --dash [url|file] or env / discovered dash.env."""
+    url = (os.environ.get("ARGOS_DASH_URL") or "").strip()
+    token = (os.environ.get("ARGOS_TOKEN") or "").strip()
+    raw = (spec or "").strip()
+
+    if raw:
+        if raw.startswith("http://") or raw.startswith("https://"):
+            url = raw.rstrip("/")
+        else:
+            path = Path(raw).expanduser()
+            if not path.is_file():
+                raise DashError(
+                    f"dash config not found: {path}\n"
+                    "download dash.env from your dash /cli page, or pass a URL"
+                )
+            data = _parse_env_file(path)
+            url = (data.get("ARGOS_DASH_URL") or url).strip().rstrip("/")
+            token = (data.get("ARGOS_TOKEN") or token).strip()
+
+    if not url or not token:
+        discovered = _discover_dash_env()
+        if discovered is not None:
+            data = _parse_env_file(discovered)
+            url = (data.get("ARGOS_DASH_URL") or url).strip().rstrip("/")
+            token = (data.get("ARGOS_TOKEN") or token).strip()
+
+    url = url.rstrip("/")
+    if not url or not token:
+        raise DashError(
+            "dash requires ARGOS_DASH_URL and ARGOS_TOKEN\n"
+            "download dash.env from your dash /cli page, then:\n"
+            "  argos run <id> --dash ./dash.env\n"
+            "or: set -a && source ./dash.env && set +a && argos run <id> --dash"
+        )
+    return DashConfig(url=url, token=token)
 
 
 def dash_url(override: str = "") -> str:
-    raw = (override or os.environ.get("ARGOS_DASH_URL") or DEFAULT_DASH).strip()
+    """Legacy helper: URL only. Prefer resolve_dash for push."""
+    raw = (override or os.environ.get("ARGOS_DASH_URL") or "").strip()
     return raw.rstrip("/")
 
 
 def dash_token() -> str:
     return (os.environ.get("ARGOS_TOKEN") or "").strip()
-
-
-class DashError(RuntimeError):
-    pass
 
 
 class Client:

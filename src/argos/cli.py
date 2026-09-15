@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 from argos.case import ONCE, SOAK, run_slug
-from argos.client import Client, DashError, dash_token, dash_url, push_dir
+from argos.client import Client, DashError, resolve_dash, push_dir
 from argos.duration import parse_duration
 from argos.paths import out_root
 from argos.report import write_reports
@@ -45,7 +45,7 @@ def list_cases(queries: list[str], mode: str | None) -> int:
     print("soak   argos run <id> --soak --for 8h")
     print("env    argos run <id> --env <name>")
     print("pack   argos list pack:<id>")
-    print("push   argos run <id> --push")
+    print("dash   argos run <id> --dash ./dash.env")
     return 0
 
 
@@ -81,8 +81,7 @@ def run_cases(
     pause: str,
     fail_fast: bool,
     env: str | None,
-    push: bool,
-    dash: str,
+    dash: str | None,
 ) -> int:
     if not queries:
         print("select at least one case. examples:", file=sys.stderr)
@@ -172,12 +171,13 @@ def run_cases(
     remote_id = ""
     pending: list[dict] = []
 
-    if push:
-        token = dash_token()
-        if not token:
-            print("ARGOS_TOKEN is required for --push", file=sys.stderr)
+    if dash is not None:
+        try:
+            cfg = resolve_dash(dash)
+        except DashError as exc:
+            print(exc, file=sys.stderr)
             return 2
-        remote = Client(dash_url(dash), token)
+        remote = Client(cfg.url, cfg.token)
         try:
             created = remote.create_run(run_meta)
         except DashError as exc:
@@ -281,16 +281,17 @@ def run_cases(
     return 0 if results and all(r.status != "fail" for r in results) else 1
 
 
-def cmd_push(path: str, dash: str) -> int:
+def cmd_push(path: str, dash: str | None) -> int:
     dest = Path(path)
     if not dest.is_dir():
         print(f"not a run directory: {dest}", file=sys.stderr)
         return 2
-    token = dash_token()
-    if not token:
-        print("ARGOS_TOKEN is required", file=sys.stderr)
+    try:
+        cfg = resolve_dash(dash if dash is not None else "")
+    except DashError as exc:
+        print(exc, file=sys.stderr)
         return 2
-    client = Client(dash_url(dash), token)
+    client = Client(cfg.url, cfg.token)
     try:
         run_id = push_dir(client, dest)
     except DashError as exc:
@@ -300,11 +301,15 @@ def cmd_push(path: str, dash: str) -> int:
     return 0
 
 
-def cmd_dash(dash: str, no_open: bool) -> int:
-    url = dash_url(dash)
-    print(url)
+def cmd_dash(target: str | None, no_open: bool) -> int:
+    try:
+        cfg = resolve_dash(target if target is not None else "")
+    except DashError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    print(cfg.url)
     if not no_open:
-        webbrowser.open(url)
+        webbrowser.open(cfg.url)
     return 0
 
 
@@ -323,17 +328,35 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--pause", default="0s", help="sleep between soak iterations")
     p_run.add_argument("--fail-fast", action="store_true", help="stop soak on first failed iteration")
     p_run.add_argument("--env", choices=env_names() or None, help=_env_help())
-    p_run.add_argument("--push", action="store_true", help="stream this run to dash")
-    p_run.add_argument("--dash", default="", help="dash base URL (default ARGOS_DASH_URL or https://argos.saidc.ai)")
+    p_run.add_argument(
+        "--dash",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="URL|FILE",
+        help="stream to dash: bare --dash, URL, or dash.env path",
+    )
     p_up = sub.add_parser("up", help="start a pack's local stack")
     p_up.add_argument("pack", nargs="?", help="pack id (default: the only pack that has a stack)")
     p_down = sub.add_parser("down", help="stop a pack's local stack")
     p_down.add_argument("pack", nargs="?", help="pack id (default: the only pack that has a stack)")
     p_push = sub.add_parser("push", help="upload a finished local run directory")
     p_push.add_argument("path", help="out/<stamp>__<slug> directory")
-    p_push.add_argument("--dash", default="", help="dash base URL")
+    p_push.add_argument(
+        "--dash",
+        nargs="?",
+        const="",
+        default="",
+        metavar="URL|FILE",
+        help="dash URL or dash.env (default: env / discovered secrets)",
+    )
     p_dash = sub.add_parser("dash", help="open the configured dash")
-    p_dash.add_argument("--dash", default="", help="dash base URL")
+    p_dash.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="dash URL or dash.env (default: env / discovered secrets)",
+    )
     p_dash.add_argument("--no-open", action="store_true", help="print the URL only")
     args = parser.parse_args(argv)
     if args.cmd == "packs":
@@ -343,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "push":
         return cmd_push(args.path, args.dash)
     if args.cmd == "dash":
-        return cmd_dash(args.dash, args.no_open)
+        return cmd_dash(args.target, args.no_open)
     if args.cmd in {"up", "down"}:
         try:
             pack = _resolve_stack_pack(args.pack)
@@ -366,7 +389,6 @@ def main(argv: list[str] | None = None) -> int:
         pause=args.pause,
         fail_fast=args.fail_fast,
         env=args.env,
-        push=args.push,
         dash=args.dash,
     )
 

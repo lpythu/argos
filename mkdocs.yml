@@ -1,0 +1,30 @@
+site_name: argos
+site_url: https://lpythu.github.io/argos/
+repo_url: https://github.com/lpythu/argos
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: black
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - scheme: slate
+      primary: black
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+nav:
+  - Home: index.md
+  - Agent skill: skill.md
+  - SDK: sdk.md
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - tables
+  - toc:
+      permalink: true
