@@ -1,6 +1,6 @@
 [project]
 name = "argos-dash"
-version = "0.5.0"
+version = "0.5.1"
 description = "argos dash: hosted run status, results, comments"
 requires-python = ">=3.12"
 dependencies = [
