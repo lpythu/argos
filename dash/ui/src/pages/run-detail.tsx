@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react"
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 
 import { Field } from "@/components/field"
 import { IterStrip } from "@/components/iter-strip"
@@ -96,14 +96,12 @@ export function RunDetailPage() {
           </p>
         </div>
         {run.has_report ? (
-          <a
+          <Link
             className="inline-flex h-8 items-center rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
-            href={`/api/runs/${run.id}/report`}
-            target="_blank"
-            rel="noreferrer"
+            to={`/runs/${run.id}/report`}
           >
             {t("report")}
-          </a>
+          </Link>
         ) : null}
       </div>
 

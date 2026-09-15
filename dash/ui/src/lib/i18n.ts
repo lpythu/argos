@@ -103,6 +103,19 @@ const zh = {
   registered: "已登记",
   cleanupOk: "清理成功",
   cleanupFail: "清理失败",
+  reportPage: "测试报告",
+  backToRun: "返回运行",
+  reportTitle: "Argos 测试报告",
+  conclusion: "关键结论",
+  roundsDetail: "轮次详情",
+  errorFingerprint: "错误指纹",
+  view: "查看",
+  stage: "阶段",
+  note: "说明",
+  file: "文件",
+  size: "大小",
+  noArtifacts: "没有可展示的产物",
+  roundN: "第 {n} 轮",
 }
 
 const en = {
@@ -210,10 +223,25 @@ const en = {
   registered: "Registered",
   cleanupOk: "Cleanup ok",
   cleanupFail: "Cleanup failed",
+  reportPage: "Report",
+  backToRun: "Back to run",
+  reportTitle: "Argos report",
+  conclusion: "Conclusion",
+  roundsDetail: "Rounds",
+  errorFingerprint: "Fingerprint",
+  view: "View",
+  stage: "Stage",
+  note: "Detail",
+  file: "File",
+  size: "Size",
+  noArtifacts: "No artifacts",
+  roundN: "round {n}",
 }
 
 const dict = navigator.language.toLowerCase().startsWith("zh") ? zh : en
 
-export function t(key: keyof typeof zh): string {
-  return dict[key]
+export function t(key: keyof typeof zh, vars?: Record<string, string | number>): string {
+  const template = dict[key]
+  if (!vars) return template
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? ""))
 }

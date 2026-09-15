@@ -370,9 +370,6 @@ async def get_file(
 async def get_report(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> Response:
     await _load_run(db, run_id)
     root = _run_dir(run_id)
-    html = root / "report.html"
-    if html.is_file():
-        return FileResponse(html, media_type="text/html; charset=utf-8")
     report = analyze.load_report(root)
     if not report:
         raise HTTPException(404, "report not found")
@@ -380,3 +377,12 @@ async def get_report(run_id: UUID, _: User = Depends(current_user), db: AsyncSes
         json.dumps(report, ensure_ascii=False, indent=2),
         media_type="application/json; charset=utf-8",
     )
+
+
+@router.get("/api/runs/{run_id}/report.html")
+async def get_report_html(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> Response:
+    await _load_run(db, run_id)
+    html = _run_dir(run_id) / "report.html"
+    if not html.is_file():
+        raise HTTPException(404, "report.html not found")
+    return FileResponse(html, media_type="text/html; charset=utf-8")

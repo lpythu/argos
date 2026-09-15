@@ -51,9 +51,11 @@ out/<stamp>__<slug>/
 | Artifact | Use |
 |---|---|
 | Terminal | Live progress |
-| `report.html` | Human conclusion + evidence |
+| `report.html` | Human conclusion + evidence (same ReportView UI as dash) |
 | `report.md` | Shareable text conclusion |
 | `report.json` / `events.jsonl` | Automation / debugging |
 | Case dirs | Probes, HTTP dumps, `ctx.write` outputs |
+
+`report.html` is a self-contained shell: embedded `report.json` + the prebuilt dash ReportView (shadcn). Rebuild the viewer after UI changes: `npm run build:report` in `dash/ui` (also runs as part of `npm run build`).
 
 Override root with `ARGOS_OUT`. Optional live mirror: `--dash ./dash.env` (still writes `out/`).
