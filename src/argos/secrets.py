@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-_FILES = ("saidc-user.env", "saidc-session.env", "argos.env")
+_FILES = ("saidc-user.env", "saidc-session.env", "argos.env", "dash.env")
 
 
 def secrets_dir() -> Path:

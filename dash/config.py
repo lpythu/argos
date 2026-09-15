@@ -22,7 +22,7 @@ def ingest_token() -> str:
 
 
 def public_url() -> str:
-    return os.environ.get("DASH_PUBLIC_URL", "https://argos.saidc.ai").rstrip("/")
+    return os.environ.get("DASH_PUBLIC_URL", "").rstrip("/")
 
 
 def skill_url() -> str:
