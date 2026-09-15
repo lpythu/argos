@@ -252,6 +252,11 @@ def _command_text(value: object) -> str:
     return shlex.join(masked)
 
 
+def _embed_for_tag(text: str, tag: str) -> str:
+    """Keep </tag> inside inlined assets from closing the HTML tag early."""
+    return re.sub(rf"</{tag}\b", rf"<\\/{tag}", text, flags=re.I)
+
+
 def html_doc(payload: dict) -> str:
     """Self-contained HTML shell: dash ReportView (prebuilt) + embedded report.json."""
     data = enrich_payload(payload)
@@ -261,8 +266,8 @@ def html_doc(payload: dict) -> str:
         raise FileNotFoundError(
             f"missing report viewer at {_STATIC_REPORT}; run: npm run build:report (in dash/ui)"
         )
-    css = css_path.read_text(encoding="utf-8")
-    js = js_path.read_text(encoding="utf-8")
+    css = _embed_for_tag(css_path.read_text(encoding="utf-8"), "style")
+    js = _embed_for_tag(js_path.read_text(encoding="utf-8"), "script")
     payload_json = json.dumps(data, ensure_ascii=False, default=str).replace("<", "\\u003c")
     return (
         "<!DOCTYPE html>\n"
