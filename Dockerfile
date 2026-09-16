@@ -1,5 +1,5 @@
-ARG NODE_IMAGE=harbor.saidc/base/saidc-node:22-pnpm11.12.0
-ARG BASE_IMAGE=harbor.saidc/base/saidc-uv:0.12.0
+ARG NODE_IMAGE=node:22-alpine
+ARG BASE_IMAGE=python:3.12-slim-bookworm
 
 FROM ${NODE_IMAGE} AS ui
 WORKDIR /ui
@@ -10,6 +10,7 @@ RUN npm run build
 
 FROM ${BASE_IMAGE}
 WORKDIR /app
+RUN pip install --no-cache-dir uv
 COPY dash/pyproject.toml dash/alembic.ini dash/entrypoint.sh dash/skill.md ./
 COPY dash/alembic ./alembic
 COPY dash/*.py ./
