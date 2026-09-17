@@ -30,6 +30,8 @@ jobs:
         run: |
           cp docs/skill.md site/skill.md
           cp docs/sdk.md site/sdk.md
+          cp docs/architecture.md site/architecture.md
+          cp docs/ingest.md site/ingest.md
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

@@ -51,11 +51,26 @@ out/<stamp>__<slug>/
 | Artifact | Use |
 |---|---|
 | Terminal | Live progress |
-| `report.html` | Human conclusion + evidence (same ReportView UI as dash) |
+| `report.html` | Human conclusion + evidence (dash ReportView IIFE inlined, or a plain shell) |
 | `report.md` | Shareable text conclusion |
 | `report.json` / `events.jsonl` | Automation / debugging |
 | Case dirs | Probes, HTTP dumps, `ctx.write` outputs |
 
-`report.html` is a self-contained shell: embedded `report.json` + the prebuilt dash ReportView (shadcn). Rebuild the viewer after UI changes: `npm run build:report` in `dash/ui` (also runs as part of `npm run build`).
+`report.html` is written at the end of the run. If a dash URL is known (`--dash`, `ARGOS_DASH_URL`, or `dash.env`), the CLI fetches `GET /report-view/manifest.json` plus `viewer.js` / `viewer.css`, stores them under `~/.argos/report-view/<ingest>/`, and **embeds** them. No dash URL, fetch failure, or empty cache yields a plain HTML shell. `report.json` and `report.md` are always written. The run does not fail because the viewer is missing.
 
-Override root with `ARGOS_OUT`. Optional live mirror: `--dash ./dash.env` (still writes `out/`).
+```mermaid
+flowchart TD
+  known{"dash URL known?"}
+  fetch["GET /report-view"]
+  cache["cache hit?"]
+  styled["inline viewer into report.html"]
+  plain["plain HTML shell"]
+  known -->|yes| fetch
+  fetch -->|ok| styled
+  fetch -->|fail| cache
+  known -->|no| cache
+  cache -->|yes| styled
+  cache -->|no| plain
+```
+
+Override root with `ARGOS_OUT`. Optional live mirror: `--dash ./dash.env` (still writes `out/`; also supplies the template URL).

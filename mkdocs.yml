@@ -16,6 +16,8 @@ theme:
         name: Light mode
 nav:
   - Home: index.md
+  - Architecture: architecture.md
+  - Ingest: ingest.md
   - Agent skill: skill.md
   - Local run: local.md
   - SDK: sdk.md

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Bump semver and create an annotated tag X.Y.Z (no v). Does not publish.
-# Usage: ./scripts/release.sh 0.2.1
+# Bump argospy semver and create an annotated tag X.Y.Z (no v). Does not publish.
+# Usage: ./scripts/release.sh 0.6.1
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,7 +8,7 @@ cd "$ROOT"
 
 if [[ $# -ne 1 ]]; then
   echo "Usage: $0 <version>" >&2
-  echo "Example: $0 0.2.1" >&2
+  echo "Example: $0 0.6.1" >&2
   exit 1
 fi
 
@@ -39,30 +39,15 @@ import pathlib, re, sys
 
 version = sys.argv[1]
 root = pathlib.Path(".")
-
-def bump(path: pathlib.Path, pattern: str, repl: str, count: int = 1) -> None:
-    text = path.read_text()
-    new, n = re.subn(pattern, repl, text, count=count)
-    if n != count:
-        raise SystemExit(f"Failed to update {path}")
-    path.write_text(new)
-
-bump(root / "pyproject.toml", r'(?m)^version = "[^"]+"$', f'version = "{version}"')
-bump(root / "dash" / "pyproject.toml", r'(?m)^version = "[^"]+"$', f'version = "{version}"')
-bump(
-    root / "chart" / "Chart.yaml",
-    r'(?m)^version: .+$',
-    f"version: {version}",
-)
-bump(
-    root / "chart" / "Chart.yaml",
-    r'(?m)^appVersion: .+$',
-    f'appVersion: "{version}"',
-)
-print(f"bumped to {version}")
+text = (root / "pyproject.toml").read_text()
+new, n = re.subn(r'(?m)^version = "[^"]+"$', f'version = "{version}"', text, count=1)
+if n != 1:
+    raise SystemExit("Failed to update pyproject.toml")
+(root / "pyproject.toml").write_text(new)
+print(f"bumped argospy to {version}")
 PY
 
-git add pyproject.toml dash/pyproject.toml chart/Chart.yaml
+git add pyproject.toml
 git commit -m "Release ${VERSION}."
 git tag -a "${VERSION}" -m "argos ${VERSION}"
 echo "Tagged ${VERSION}. Push with: git push origin main --tags"

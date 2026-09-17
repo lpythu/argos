@@ -21,21 +21,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check tag matches package versions
+      - name: Check tag matches argospy version
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           PY_VER=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          DASH_VER=$(python3 -c "import tomllib; print(tomllib.load(open('dash/pyproject.toml','rb'))['project']['version'])")
-          CHART_VER=$(python3 -c "import pathlib,re; t=pathlib.Path('chart/Chart.yaml').read_text(); print(re.search(r'(?m)^version:\\s*(\\S+)', t).group(1))")
-          APP_VER=$(python3 -c "import pathlib,re; t=pathlib.Path('chart/Chart.yaml').read_text(); print(re.search(r'(?m)^appVersion:\\s*[\"\\']?([^\"\\']+)', t).group(1))")
-          echo "tag=$TAG py=$PY_VER dash=$DASH_VER chart=$CHART_VER app=$APP_VER"
-          if [ "$TAG" != "$PY_VER" ] || [ "$TAG" != "$DASH_VER" ] || [ "$TAG" != "$CHART_VER" ] || [ "$TAG" != "$APP_VER" ]; then
-            echo "::error::Tag $TAG must match pyproject.toml, dash/pyproject.toml, and chart/Chart.yaml"
+          echo "tag=$TAG py=$PY_VER"
+          if [ "$TAG" != "$PY_VER" ]; then
+            echo "::error::Tag $TAG must match pyproject.toml"
             exit 1
           fi
-          test -f src/argos/static/report/viewer.js
-          test -f src/argos/static/report/viewer.css
 
       - uses: astral-sh/setup-uv@v10.1.0
         with:
@@ -75,20 +70,8 @@ jobs:
       - name: Publish to PyPI
         run: uv publish --trusted-publishing always
 
-  deploy-dash:
-    needs: check
-    runs-on: [self-hosted, buildof]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Build image and helm office
-        env:
-          TAG: ${{ github.ref_name }}
-        run: bash scripts/dash-release.sh
-
   github-release:
-    needs: [publish-pypi, deploy-dash]
+    needs: [publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write

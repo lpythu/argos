@@ -124,7 +124,7 @@ demo = "mypack.pack:pack"
 | `argos dash [url\|file]` | Open configured dash |
 | `argos up` / `argos down` | Pack local stack |
 
-`--dash` with no value uses `ARGOS_DASH_URL` + `ARGOS_TOKEN` or discovered `secrets/dash.env`. Path argument loads both keys from that file. URL argument sets origin; token still from env/file.
+`--dash` with no value uses `ARGOS_DASH_URL` + `ARGOS_TOKEN` or discovered `secrets/dash.env`. Path argument loads both keys from that file. URL argument sets origin; token still from env/file. HTTP shape: https://lpythu.github.io/argos/ingest/
 
 Terminal progress and `out/` layout: https://lpythu.github.io/argos/local/
 
