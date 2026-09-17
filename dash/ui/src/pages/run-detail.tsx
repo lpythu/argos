@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { api, type Comment, type EventRow, type Operation, type Run } from "@/lib/api"
+import { api, packLabel, sourceDetail, sourceHref, sourceLabel, type Comment, type EventRow, type Operation, type Run } from "@/lib/api"
 import { fmtDur, fmtWhen, metricValue } from "@/lib/fmt"
 import { t } from "@/lib/i18n"
 import { statusVariant } from "@/lib/status"
@@ -87,12 +87,13 @@ export function RunDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-lg font-medium">{run.slug || run.id}</h1>
+            <h1 className="font-mono text-lg font-medium">{run.sid || run.id}</h1>
             <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {fmtWhen(run.created_at)} · {run.mode} · {run.env || "—"} · {t("runner")} {run.runner || "—"}
-            {run.queries?.length ? ` · ${run.queries.join(" ")}` : ""}
+            {run.queries?.length ? ` · ${t("selector")} ${run.queries.join(" ")}` : ""}
+            {packLabel(run.packs) ? ` · ${t("pack")} ${packLabel(run.packs)}` : ""}
           </p>
         </div>
         {run.has_report ? (
@@ -114,6 +115,30 @@ export function RunDetailPage() {
         <Stat label={t("elapsed")} value={fmtDur(run.elapsed_s)} />
       </div>
       <PassBar passed={run.passed} failed={run.failed} skipped={run.skipped + run.interrupted} />
+
+      <Card className="space-y-2">
+        <CardTitle>{t("source")}</CardTitle>
+        {sourceHref(run.source) ? (
+          <p>
+            <a className="underline-offset-2 hover:underline" href={sourceHref(run.source)} target="_blank" rel="noreferrer">
+              {sourceLabel(run.source, run.runner)}
+            </a>
+          </p>
+        ) : (
+          <p>{sourceLabel(run.source, run.runner)}</p>
+        )}
+        {sourceDetail(run.source) ? <p className="text-sm text-muted-foreground">{sourceDetail(run.source)}</p> : null}
+        {run.source?.note ? (
+          <p className="text-sm text-muted-foreground">
+            {t("note")} {run.source.note}
+          </p>
+        ) : null}
+        {run.queries?.length ? (
+          <p className="font-mono text-sm">
+            {t("selector")} {run.queries.join(" ")}
+          </p>
+        ) : null}
+      </Card>
 
       <Card className="space-y-3">
         <CardTitle>{t("caseOverview")}</CardTitle>

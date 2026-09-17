@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import { Field } from "@/components/field"
-import { api, type Overview, type Run } from "@/lib/api"
+import { api, sourceLabel, type Overview, type Run } from "@/lib/api"
 import { fmtWhen } from "@/lib/fmt"
 import { t } from "@/lib/i18n"
 import { statusVariant } from "@/lib/status"
@@ -190,10 +190,13 @@ export function HomePage() {
               {overview.live.map((row) => (
                 <tr key={row.id} className="border-t">
                   <td className="py-2">
-                    <Link to={`/runs/${row.id}`} className="hover:underline">
-                      {row.slug}
+                    <Link to={`/runs/${row.id}`} className="font-mono hover:underline">
+                      {row.sid || row.id}
                     </Link>
-                    <div className="text-xs text-muted-foreground">{fmtWhen(row.created_at)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {fmtWhen(row.created_at)}
+                      {row.source?.kind === "acahti" && row.source.repo ? ` · ${row.source.repo}` : ""}
+                    </div>
                   </td>
                   <td>
                     {row.env || "—"} · {row.mode}
@@ -245,7 +248,7 @@ export function HomePage() {
                     {issue.max_streak >= 2 ? ` · ×${issue.max_streak}` : ""}
                   </td>
                   <td>
-                    <Link to={`/runs/${issue.latest_run}`} className="hover:underline">
+                    <Link to={`/runs/${issue.latest_run}`} className="font-mono hover:underline">
                       {issue.latest_slug}
                     </Link>
                     <div className="text-xs text-muted-foreground">{fmtWhen(issue.last)}</div>
@@ -271,11 +274,12 @@ export function HomePage() {
             <Link key={run.id} to={`/runs/${run.id}`}>
               <Card className="space-y-2 hover:bg-muted/40">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{run.slug || run.id.slice(0, 8)}</span>
+                  <span className="font-mono font-medium">{run.sid || run.id}</span>
                   <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {fmtWhen(run.created_at)} · {run.env || "—"} · {run.mode}
+                  {run.source ? ` · ${sourceLabel(run.source, run.runner)}` : ""}
                 </p>
                 <PassBar passed={run.passed} failed={run.failed} skipped={run.skipped} />
               </Card>

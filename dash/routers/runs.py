@@ -6,8 +6,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field
-from sqlalchemy import select
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,20 +17,42 @@ from auth import current_user, require_ingest
 from config import data_root, public_url
 from database import get_db
 from models import CaseRow, Run, User
+from sid import new_sid
 
 router = APIRouter()
 
 
+class PackRef(BaseModel):
+    id: str
+    title: str = ""
+
+
 class RunCreate(BaseModel):
-    stamp: str = ""
+    model_config = ConfigDict(populate_by_name=True)
+
+    stamp: str = Field(default="", validation_alias=AliasChoices("stamp", "started"))
     slug: str = ""
     mode: str = "once"
     env: str = ""
     queries: list[str] = Field(default_factory=list)
-    packs: list[str] = Field(default_factory=list)
+    packs: list[PackRef] = Field(default_factory=list)
+    source: dict[str, Any] = Field(default_factory=dict)
     runner: str = ""
     cases: list[dict[str, Any]] = Field(default_factory=list)
     status: str = "running"
+
+    @field_validator("packs", mode="before")
+    @classmethod
+    def coerce_packs(cls, value: Any) -> Any:
+        if not value:
+            return []
+        out = []
+        for item in value:
+            if isinstance(item, str):
+                out.append({"id": item, "title": ""})
+            else:
+                out.append(item)
+        return out
 
 
 class EventsBody(BaseModel):
@@ -46,17 +69,44 @@ class FileBody(BaseModel):
     text: str
 
 
-def _run_dir(run_id: UUID) -> Path:
+def _run_dir(run_id: str) -> Path:
     dest = data_root() / "runs" / str(run_id)
     dest.mkdir(parents=True, exist_ok=True)
     return dest
 
 
+def _public_id(run: Run) -> str:
+    return run.sid or str(run.id)
+
+
+def _pack_rows(value: Any) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    if not isinstance(value, list):
+        return rows
+    for item in value:
+        if isinstance(item, str):
+            if item:
+                rows.append({"id": item, "title": ""})
+            continue
+        if isinstance(item, dict):
+            pack_id = str(item.get("id") or "")
+            if pack_id:
+                rows.append({"id": pack_id, "title": str(item.get("title") or "")})
+    return rows
+
+
+def _source(run: Run) -> dict[str, Any]:
+    raw = run.source if isinstance(run.source, dict) else {}
+    return dict(raw)
+
+
 def _dump(run: Run, *, detail: bool = False) -> dict[str, Any]:
     stats = analyze.counts(run)
+    sid = _public_id(run)
     data = {
-        "id": str(run.id),
-        "url": f"{public_url()}/runs/{run.id}",
+        "id": sid,
+        "sid": sid,
+        "url": f"{public_url()}/runs/{sid}",
         "stamp": run.stamp,
         "slug": run.slug,
         "mode": run.mode,
@@ -64,7 +114,8 @@ def _dump(run: Run, *, detail: bool = False) -> dict[str, Any]:
         "status": run.status,
         "runner": run.runner,
         "queries": run.queries,
-        "packs": run.packs,
+        "packs": _pack_rows(run.packs),
+        "source": _source(run),
         "summary": run.summary,
         "created_at": run.created_at.isoformat() if run.created_at else "",
         "finished_at": run.finished_at.isoformat() if run.finished_at else "",
@@ -99,8 +150,16 @@ async def _recent_runs(db: AsyncSession, *, limit: int = 400) -> list[Run]:
     return list(result.scalars().unique().all())
 
 
-async def _load_run(db: AsyncSession, run_id: UUID) -> Run:
-    result = await db.execute(select(Run).options(selectinload(Run.cases)).where(Run.id == run_id))
+async def _load_run(db: AsyncSession, run_id: str | UUID) -> Run:
+    key = str(run_id).strip()
+    if not key:
+        raise HTTPException(404, "run not found")
+    cond = [Run.sid == key]
+    try:
+        cond.append(Run.id == UUID(key))
+    except ValueError:
+        pass
+    result = await db.execute(select(Run).options(selectinload(Run.cases)).where(or_(*cond)))
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(404, "run not found")
@@ -109,37 +168,51 @@ async def _load_run(db: AsyncSession, run_id: UUID) -> Run:
 
 @router.post("/api/runs", status_code=201, dependencies=[Depends(require_ingest)])
 async def create_run(body: RunCreate, db: AsyncSession = Depends(get_db)) -> dict:
-    run = Run(
-        stamp=body.stamp,
-        slug=body.slug,
-        mode=body.mode,
-        env=body.env,
-        status=body.status or "running",
-        runner=body.runner,
-        queries=body.queries,
-        packs=body.packs,
-    )
-    for item in body.cases:
-        run.cases.append(
-            CaseRow(
-                spec_id=str(item.get("id") or ""),
-                slug=str(item.get("slug") or ""),
-                title=str(item.get("title") or ""),
-                group=str(item.get("group") or ""),
-                pack=str(item.get("pack") or ""),
-            )
+    packs = [item.model_dump() for item in body.packs]
+    source = dict(body.source or {})
+    if not source.get("kind"):
+        source["kind"] = "cli"
+    run = None
+    for _ in range(8):
+        run = Run(
+            sid=new_sid(),
+            stamp=body.stamp,
+            slug=body.slug,
+            mode=body.mode,
+            env=body.env,
+            status=body.status or "running",
+            runner=body.runner,
+            queries=body.queries,
+            packs=packs,
+            source=source,
         )
-    db.add(run)
-    await db.commit()
+        for item in body.cases:
+            run.cases.append(
+                CaseRow(
+                    spec_id=str(item.get("id") or ""),
+                    slug=str(item.get("slug") or ""),
+                    title=str(item.get("title") or ""),
+                    group=str(item.get("group") or ""),
+                    pack=str(item.get("pack") or ""),
+                )
+            )
+        db.add(run)
+        try:
+            await db.commit()
+            break
+        except IntegrityError:
+            await db.rollback()
+            run = None
+    if run is None:
+        raise HTTPException(500, "could not allocate run id")
     await db.refresh(run)
     dest = _run_dir(run.id)
     (dest / "run.json").write_text(json.dumps(body.model_dump(), ensure_ascii=False, indent=2) + "\n")
-    result = await _load_run(db, run.id)
-    return _dump(result)
+    return _dump(await _load_run(db, run.id))
 
 
 @router.post("/api/runs/{run_id}/events", dependencies=[Depends(require_ingest)])
-async def post_events(run_id: UUID, body: EventsBody, db: AsyncSession = Depends(get_db)) -> dict:
+async def post_events(run_id: str, body: EventsBody, db: AsyncSession = Depends(get_db)) -> dict:
     run = await _load_run(db, run_id)
     dest = _run_dir(run.id) / "events.jsonl"
     by_id = {(row.spec_id, row.iteration): row for row in run.cases}
@@ -203,7 +276,7 @@ async def post_events(run_id: UUID, body: EventsBody, db: AsyncSession = Depends
 
 
 @router.post("/api/runs/{run_id}/finish", dependencies=[Depends(require_ingest)])
-async def finish_run(run_id: UUID, body: FinishBody, db: AsyncSession = Depends(get_db)) -> dict:
+async def finish_run(run_id: str, body: FinishBody, db: AsyncSession = Depends(get_db)) -> dict:
     run = await _load_run(db, run_id)
     run.status = body.status
     run.summary = body.report
@@ -233,12 +306,12 @@ async def finish_run(run_id: UUID, body: FinishBody, db: AsyncSession = Depends(
 
 
 @router.post("/api/runs/{run_id}/files", dependencies=[Depends(require_ingest)])
-async def upload_file(run_id: UUID, body: FileBody, db: AsyncSession = Depends(get_db)) -> dict:
-    await _load_run(db, run_id)
+async def upload_file(run_id: str, body: FileBody, db: AsyncSession = Depends(get_db)) -> dict:
+    run = await _load_run(db, run_id)
     rel = Path(body.path)
     if rel.is_absolute() or ".." in rel.parts:
         raise HTTPException(400, "invalid path")
-    dest = _run_dir(run_id) / rel
+    dest = _run_dir(run.id) / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body.text)
     return {"ok": True, "path": rel.as_posix()}
@@ -265,15 +338,24 @@ async def list_runs(
     runs = []
     for run in result.scalars().unique().all():
         if needle:
+            src = run.source if isinstance(run.source, dict) else {}
+            packs = _pack_rows(run.packs)
             hay = " ".join(
                 [
+                    run.sid or "",
                     run.slug,
                     run.stamp,
                     run.env,
                     run.mode,
                     run.runner,
-                    " ".join(str(item) for item in run.packs or []),
+                    " ".join(row["id"] + " " + row["title"] for row in packs),
                     " ".join(str(item) for item in run.queries or []),
+                    str(src.get("repo") or ""),
+                    str(src.get("sha") or ""),
+                    str(src.get("job") or ""),
+                    str(src.get("note") or ""),
+                    str(src.get("url") or ""),
+                    str(src.get("kind") or ""),
                 ]
             ).lower()
             if needle not in hay:
@@ -319,19 +401,19 @@ async def get_envs(_: User = Depends(current_user), db: AsyncSession = Depends(g
 
 
 @router.get("/api/runs/{run_id}")
-async def get_run(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def get_run(run_id: str, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
     return _dump(await _load_run(db, run_id), detail=True)
 
 
 @router.get("/api/runs/{run_id}/events")
 async def get_events(
-    run_id: UUID,
+    run_id: str,
     _: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=80, ge=1, le=400),
 ) -> dict:
-    await _load_run(db, run_id)
-    path = _run_dir(run_id) / "events.jsonl"
+    run = await _load_run(db, run_id)
+    path = _run_dir(run.id) / "events.jsonl"
     events: list[dict[str, Any]] = []
     if path.is_file():
         for line in path.read_text().splitlines():
@@ -341,24 +423,24 @@ async def get_events(
 
 
 @router.get("/api/runs/{run_id}/files")
-async def get_files(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
-    await _load_run(db, run_id)
-    return {"files": analyze.list_files(_run_dir(run_id))}
+async def get_files(run_id: str, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    run = await _load_run(db, run_id)
+    return {"files": analyze.list_files(_run_dir(run.id))}
 
 
 @router.get("/api/runs/{run_id}/file")
 async def get_file(
-    run_id: UUID,
+    run_id: str,
     path: str = Query(..., min_length=1),
     _: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
-    await _load_run(db, run_id)
+    run = await _load_run(db, run_id)
     rel = Path(path)
     if rel.is_absolute() or ".." in rel.parts or not path:
         raise HTTPException(400, "invalid path")
-    dest = (_run_dir(run_id) / rel).resolve()
-    root = _run_dir(run_id).resolve()
+    dest = (_run_dir(run.id) / rel).resolve()
+    root = _run_dir(run.id).resolve()
     if dest != root and root not in dest.parents:
         raise HTTPException(400, "invalid path")
     if not dest.is_file():
@@ -367,9 +449,9 @@ async def get_file(
 
 
 @router.get("/api/runs/{run_id}/report")
-async def get_report(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> Response:
-    await _load_run(db, run_id)
-    root = _run_dir(run_id)
+async def get_report(run_id: str, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> Response:
+    run = await _load_run(db, run_id)
+    root = _run_dir(run.id)
     report = analyze.load_report(root)
     if not report:
         raise HTTPException(404, "report not found")
@@ -380,9 +462,9 @@ async def get_report(run_id: UUID, _: User = Depends(current_user), db: AsyncSes
 
 
 @router.get("/api/runs/{run_id}/report.html")
-async def get_report_html(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> Response:
-    await _load_run(db, run_id)
-    html = _run_dir(run_id) / "report.html"
+async def get_report_html(run_id: str, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> Response:
+    run = await _load_run(db, run_id)
+    html = _run_dir(run.id) / "report.html"
     if not html.is_file():
         raise HTTPException(404, "report.html not found")
     return FileResponse(html, media_type="text/html; charset=utf-8")

@@ -94,8 +94,58 @@ export type CatalogCase = {
 
 export type Artifact = { path: string; size: number }
 
+export type PackRef = { id: string; title: string }
+
+export type RunSource = {
+  kind?: string
+  repo?: string
+  sha?: string
+  ref?: string
+  pipeline?: number | string
+  job?: string
+  step?: string
+  url?: string
+  actor?: string
+  note?: string
+}
+
+export function packId(item: PackRef | string): string {
+  return typeof item === "string" ? item : item.id
+}
+
+export function packLabel(packs: Array<PackRef | string> | undefined): string {
+  return (packs || []).map(packId).filter(Boolean).join(", ")
+}
+
+export function packTitle(item: PackRef | string): string {
+  if (typeof item === "string") return item
+  return item.title && item.title !== item.id ? `${item.id} · ${item.title}` : item.id
+}
+
+export function sourceHref(source?: RunSource): string {
+  return (source?.url || "").trim()
+}
+
+export function sourceLabel(source?: RunSource, runner = ""): string {
+  if (source?.kind === "acahti") {
+    const repo = source.repo || ""
+    const n = source.pipeline
+    if (repo && n !== undefined && n !== "") return `${repo} #${n}`
+    return repo || "acahti"
+  }
+  return runner ? `cli · ${runner}` : "cli"
+}
+
+export function sourceDetail(source?: RunSource): string {
+  if (source?.kind !== "acahti") return ""
+  const sha = String(source.sha || "").slice(0, 7)
+  const job = source.job || ""
+  return [sha, job].filter(Boolean).join(" · ")
+}
+
 export type Run = {
   id: string
+  sid?: string
   url: string
   stamp: string
   slug: string
@@ -104,7 +154,8 @@ export type Run = {
   status: string
   runner: string
   queries: string[]
-  packs: string[]
+  packs: Array<PackRef | string>
+  source?: RunSource
   summary: { passed?: number; failed?: number; skipped?: number; elapsed_s?: number }
   created_at: string
   finished_at: string
@@ -146,11 +197,13 @@ export type OverviewIssue = {
 
 export type LiveRun = {
   id: string
+  sid?: string
   slug: string
   env: string
   mode: string
   status: string
   runner: string
+  source?: RunSource
   created_at: string
   passed: number
   failed: number
@@ -187,3 +240,4 @@ export type Catalog = {
 }
 
 export type EventRow = Record<string, unknown>
+

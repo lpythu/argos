@@ -50,8 +50,18 @@ Dash must be deployed first. On that dash, open `/cli`, download `dash.env` (`AR
 argos run <id> --dash ./dash.env
 argos run <id> --dash                         # uses env / secrets/dash.env
 argos run <id> --dash https://dash.example.com
+argos run <id> --dash --note "office smoke"
 argos push out/<stamp>__<slug> --dash ./dash.env
 ```
+
+`--dash` prints `argos <sid>` (12-char public run id, no hyphens) and `dash {url}` (`{ARGOS_DASH_URL}/runs/{sid}`). In Acahti CI the CLI also records pipeline provenance (`CI_REPO`, `CI_COMMIT_SHA`, `CI_PIPELINE_NUMBER`, `CI_WORKFLOW_NAME`) so the dash run list links to the pipeline, and Acahti pipeline pages link back to that dash URL.
+
+Dash list fields:
+
+- **id** — `sid`, not case slug
+- **selector** — the `argos run` arguments (`all`, `pack:tm`, …)
+- **pack** — pack id (product e2e packs use the repo name)
+- **source** — `acahti` (`owner/name #N` + sha + job) or `cli`
 
 No default dash URL. Secrets: `ARGOS_SECRETS` or `secrets/` walking up from cwd, then `~/.argos/` (`dash.env` / `argos.env`). Do not commit tokens.
 

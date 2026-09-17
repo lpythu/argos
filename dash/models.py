@@ -24,6 +24,7 @@ class Run(Base):
     __tablename__ = "runs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sid: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     stamp: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     slug: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     mode: Mapped[str] = mapped_column(String(16), nullable=False, default="once")
@@ -32,6 +33,7 @@ class Run(Base):
     runner: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     queries: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     packs: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    source: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

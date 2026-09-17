@@ -16,6 +16,7 @@ from argos.run_status import RunStatus, StopRequested
 from argos.runner import public_event, write_events
 from argos.secrets import load_secrets
 from argos.select import select
+from argos.source import run_source
 from argos.suite import all_cases, all_packs, apply_env, env_names, execute, pack_named, packs_of
 from argos.term import DIM, RESET, Progress, fmt_dur
 
@@ -82,6 +83,7 @@ def run_cases(
     fail_fast: bool,
     env: str | None,
     dash: str | None,
+    note: str = "",
 ) -> int:
     if not queries:
         print("select at least one case. examples:", file=sys.stderr)
@@ -133,9 +135,10 @@ def run_cases(
         "duration": duration if soak else "",
         "pause": pause if soak else "",
         "fail_fast": bool(fail_fast and soak),
-        "packs": [pack.id for pack in involved],
+        "packs": [{"id": pack.id, "title": pack.title} for pack in involved],
         "queries": queries,
         "runner": socket.gethostname(),
+        "source": run_source(note=note),
         "cases": [
             {
                 "id": c.spec.id,
@@ -183,8 +186,9 @@ def run_cases(
         except DashError as exc:
             print(exc, file=sys.stderr)
             return 2
-        remote_id = str(created["id"])
-        print(f"dash  {created.get('url') or remote.browse_url(remote_id)}")
+        remote_id = str(created.get("sid") or created.get("id") or "")
+        print(f"argos {remote_id}")
+        print(f"dash {created.get('url') or remote.browse_url(remote_id)}")
 
     def flush_remote() -> None:
         if not remote or not remote_id or not pending:
@@ -271,7 +275,8 @@ def run_cases(
                 flush_remote()
             report = json.loads((dest / "report.json").read_text())
             remote.finish(remote_id, report, final)
-            print(f"dash  {remote.browse_url(remote_id)}")
+            print(f"argos {remote_id}")
+            print(f"dash {remote.browse_url(remote_id)}")
         except DashError as exc:
             print(exc, file=sys.stderr)
     if sys.stdout.isatty():
@@ -297,7 +302,8 @@ def cmd_push(path: str, dash: str | None) -> int:
     except DashError as exc:
         print(exc, file=sys.stderr)
         return 2
-    print(client.browse_url(run_id))
+    print(f"argos {run_id}")
+    print(f"dash {client.browse_url(run_id)}")
     return 0
 
 
@@ -336,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         metavar="URL|FILE",
         help="stream to dash: bare --dash, URL, or dash.env path",
     )
+    p_run.add_argument("--note", default="", help="optional remark stored on the dash run")
     p_up = sub.add_parser("up", help="start a pack's local stack")
     p_up.add_argument("pack", nargs="?", help="pack id (default: the only pack that has a stack)")
     p_down = sub.add_parser("down", help="stop a pack's local stack")
@@ -390,6 +397,7 @@ def main(argv: list[str] | None = None) -> int:
         fail_fast=args.fail_fast,
         env=args.env,
         dash=args.dash,
+        note=args.note,
     )
 
 

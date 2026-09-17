@@ -5,10 +5,30 @@ import { Field } from "@/components/field"
 import { PassBar } from "@/components/pass-bar"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { api, type Run } from "@/lib/api"
+import { api, packLabel, packTitle, sourceDetail, sourceHref, sourceLabel, type Run } from "@/lib/api"
 import { fmtDur, fmtWhen } from "@/lib/fmt"
 import { t } from "@/lib/i18n"
 import { statusVariant } from "@/lib/status"
+
+function SourceCell({ run }: { run: Run }) {
+  const href = sourceHref(run.source)
+  const label = sourceLabel(run.source, run.runner)
+  const detail = sourceDetail(run.source)
+  const inner = (
+    <>
+      <div>{label}</div>
+      {detail ? <div className="text-xs text-muted-foreground">{detail}</div> : null}
+    </>
+  )
+  if (!href) return <td className="px-3 py-2">{inner}</td>
+  return (
+    <td className="px-3 py-2">
+      <a className="underline-offset-2 hover:underline" href={href} target="_blank" rel="noreferrer">
+        {inner}
+      </a>
+    </td>
+  )
+}
 
 export function RunsPage() {
   const [runs, setRuns] = useState<Run[]>([])
@@ -41,7 +61,7 @@ export function RunsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-lg font-medium">{t("runs")}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Input className="w-56" value={q} onChange={(event) => setQ(event.target.value)} placeholder={t("filter")} />
+          <Input className="w-64" value={q} onChange={(event) => setQ(event.target.value)} placeholder={t("filter")} />
           <Field value={env} onChange={(event) => setEnv(event.target.value)}>
             <option value="all">{t("allEnvs")}</option>
             {envs.map((item) => (
@@ -63,8 +83,10 @@ export function RunsPage() {
               <tr>
                 <th className="px-3 py-2">{t("status")}</th>
                 <th className="px-3 py-2">id</th>
-                <th className="px-3 py-2">{t("env")}</th>
+                <th className="px-3 py-2">{t("source")}</th>
+                <th className="px-3 py-2">{t("selector")}</th>
                 <th className="px-3 py-2">{t("pack")}</th>
+                <th className="px-3 py-2">{t("env")}</th>
                 <th className="px-3 py-2">P/F/S</th>
                 <th className="px-3 py-2">{t("elapsed")}</th>
               </tr>
@@ -76,21 +98,22 @@ export function RunsPage() {
                     <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
                   </td>
                   <td className="px-3 py-2">
-                    <Link to={`/runs/${run.id}`} className="underline-offset-2 hover:underline">
-                      {run.slug || run.id.slice(0, 8)}
+                    <Link to={`/runs/${run.id}`} className="font-mono underline-offset-2 hover:underline">
+                      {run.sid || run.id}
                     </Link>
                     <div className="text-xs text-muted-foreground">{fmtWhen(run.created_at)}</div>
-                    {run.queries?.length ? (
-                      <div className="text-xs text-muted-foreground">{run.queries.join(" ")}</div>
-                    ) : null}
                     <div className="mt-1 w-32">
                       <PassBar passed={run.passed} failed={run.failed} skipped={run.skipped} />
                     </div>
                   </td>
+                  <SourceCell run={run} />
+                  <td className="px-3 py-2 font-mono text-xs">{run.queries?.join(" ") || "—"}</td>
+                  <td className="px-3 py-2" title={(run.packs || []).map(packTitle).join(", ")}>
+                    {packLabel(run.packs) || "—"}
+                  </td>
                   <td className="px-3 py-2">
                     {run.env || "—"} · {run.mode}
                   </td>
-                  <td className="px-3 py-2">{run.packs.join(", ") || "—"}</td>
                   <td className="px-3 py-2 tabular-nums">
                     {run.passed} / {run.failed} / {run.skipped}
                   </td>

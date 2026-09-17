@@ -20,6 +20,8 @@ argos run <id> --dash ./dash.env
 # or: set -a && source ./dash.env && set +a && argos run <id> --dash
 ```
 
+`--dash` prints `argos <sid>` and `dash {url}`. Acahti e2e jobs scrape that line and link `{ARGOS_DASH_URL}/runs/{sid}` from the pipeline page.
+
 Put `dash.env` in `secrets/` (gitignored) or pass the path explicitly. Do not commit it.
 
 ## Write / run cases
