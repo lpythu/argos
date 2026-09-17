@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -8,7 +6,8 @@ from sqlalchemy.orm import selectinload
 
 from auth import current_user
 from database import get_db
-from models import Comment, Run, User
+from models import Comment, User
+from routers.runs import _load_run
 
 router = APIRouter()
 
@@ -29,13 +28,12 @@ def _dump(row: Comment) -> dict:
 
 
 @router.get("/api/runs/{run_id}/comments")
-async def list_comments(run_id: UUID, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
-    if await db.get(Run, run_id) is None:
-        raise HTTPException(404, "run not found")
+async def list_comments(run_id: str, _: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    run = await _load_run(db, run_id)
     result = await db.execute(
         select(Comment)
         .options(selectinload(Comment.author))
-        .where(Comment.run_id == run_id)
+        .where(Comment.run_id == run.id)
         .order_by(Comment.created_at.asc())
     )
     return {"comments": [_dump(row) for row in result.scalars().all()]}
@@ -43,17 +41,16 @@ async def list_comments(run_id: UUID, _: User = Depends(current_user), db: Async
 
 @router.post("/api/runs/{run_id}/comments", status_code=201)
 async def add_comment(
-    run_id: UUID,
+    run_id: str,
     body: CommentBody,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    if await db.get(Run, run_id) is None:
-        raise HTTPException(404, "run not found")
+    run = await _load_run(db, run_id)
     text = body.body.strip()
     if not text:
         raise HTTPException(400, "empty comment")
-    row = Comment(run_id=run_id, author_id=user.id, case_id=body.case_id.strip(), body=text)
+    row = Comment(run_id=run.id, author_id=user.id, case_id=body.case_id.strip(), body=text)
     db.add(row)
     await db.commit()
     await db.refresh(row)

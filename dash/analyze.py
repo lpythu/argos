@@ -17,6 +17,10 @@ _STAMP_RE = re.compile(r"\b20\d{2}[-/]?\d{2}[-/]?\d{2}[T _-]?\d{2}:?\d{2}:?\d{2}
 LIVE = frozenset({"running", "paused"})
 
 
+def _run_id(run: "Run") -> str:
+    return run.sid or str(run.id)
+
+
 def fingerprint(message: str) -> tuple[str, str]:
     display = " ".join(str(message or "").split())
     normalized = _UUID_RE.sub("<id>", display)
@@ -235,7 +239,7 @@ def catalog(runs: list["Run"]) -> list[dict[str, Any]]:
                 "status": row.status,
                 "env": run.env,
                 "mode": run.mode,
-                "run_id": str(run.id),
+                "run_id": _run_id(run),
                 "run_slug": run.slug,
                 "seen_at": run.created_at.isoformat() if run.created_at else "",
                 "typical_s": int(extra.get("typical_s") or 0),
@@ -289,16 +293,16 @@ def overview(runs: list["Run"], *, hours: int, env: str, catalog_ids: set[str]) 
                     "envs": set(),
                     "first": stamp,
                     "last": stamp,
-                    "latest_run": str(run.id),
-                    "latest_slug": run.slug or run.stamp,
+                    "latest_run": _run_id(run),
+                    "latest_slug": run.sid or run.slug or run.stamp,
                 },
             )
             issue["count"] += 1
             issue["cases"].add(row.spec_id)
             issue["envs"].add(run.env or "-")
             issue["last"] = stamp
-            issue["latest_run"] = str(run.id)
-            issue["latest_slug"] = run.slug or run.stamp
+            issue["latest_run"] = _run_id(run)
+            issue["latest_slug"] = run.sid or run.slug or run.stamp
 
     issues: list[dict[str, Any]] = []
     for issue in issue_groups.values():
@@ -338,8 +342,10 @@ def overview(runs: list["Run"], *, hours: int, env: str, catalog_ids: set[str]) 
         "issues": issues,
         "live": [
             {
-                "id": str(run.id),
+                "id": _run_id(run),
+                "sid": _run_id(run),
                 "slug": run.slug or run.stamp,
+                "source": dict(run.source) if isinstance(run.source, dict) else {},
                 "env": run.env,
                 "mode": run.mode,
                 "status": run.status,

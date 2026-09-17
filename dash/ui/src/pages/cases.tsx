@@ -112,8 +112,8 @@ function CaseRow({ item, on }: { item: CatalogCase; on: boolean }) {
       </td>
       <td className="px-3 py-2">{item.env || "—"}</td>
       <td className="px-3 py-2">
-        <Link to={`/runs/${item.run_id}`} className="hover:underline">
-          {item.run_slug || item.run_id.slice(0, 8)}
+        <Link to={`/runs/${item.run_id}`} className="font-mono hover:underline">
+          {item.run_id}
         </Link>
       </td>
     </tr>

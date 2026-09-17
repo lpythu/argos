@@ -154,7 +154,7 @@ def push_dir(client: Client, dest: Path) -> str:
     run_meta = _read_json(dest / "run.json")
     report = _read_json(dest / "report.json")
     created = client.create_run({**run_meta, "status": "running"})
-    run_id = str(created["id"])
+    run_id = str(created.get("sid") or created["id"])
     events_path = dest / "events.jsonl"
     if events_path.is_file():
         rows = [_parse_event(line) for line in events_path.read_text().splitlines() if line.strip()]
