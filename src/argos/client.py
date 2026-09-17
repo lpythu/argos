@@ -3,6 +3,7 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
@@ -93,6 +94,13 @@ def dash_token() -> str:
     return (os.environ.get("ARGOS_TOKEN") or "").strip()
 
 
+def user_agent() -> str:
+    try:
+        return f"argospy/{version('argospy')}"
+    except PackageNotFoundError:
+        return "argospy"
+
+
 class Client:
     def __init__(self, base: str, token: str) -> None:
         self.base = base.rstrip("/")
@@ -123,6 +131,7 @@ class Client:
                 "Accept": "application/json",
                 "Content-Type": "application/json; charset=utf-8",
                 "Authorization": f"Bearer {self.token}",
+                "User-Agent": user_agent(),
             },
         )
         try:
