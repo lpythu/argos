@@ -44,7 +44,7 @@ During / after a run: terminal progress + `out/<stamp>__<slug>/` reports — see
 
 ## Optional: stream to dash
 
-Dash must be deployed first. On that dash, open `/cli`, download `dash.env` (`ARGOS_DASH_URL` + `ARGOS_TOKEN`). Then:
+Dash must be deployed first (SAIDC office: https://argos.saidc.ai). On that dash, open `/cli`, download `dash.env` (`ARGOS_DASH_URL` + `ARGOS_TOKEN`). Then:
 
 ```bash
 argos run <id> --dash ./dash.env
@@ -61,7 +61,7 @@ Dash list fields:
 - **id** — `sid`, not case slug
 - **selector** — the `argos run` arguments (`all`, `pack:tm`, …)
 - **pack** — pack id (product e2e packs use the repo name)
-- **source** — `acahti` (`owner/name #N` + sha + job) or `cli`
+- **source** — `acahti` (`owner/name #N` + actor + sha + job) or `cli` (actor)
 
 No default dash URL. Secrets: `ARGOS_SECRETS` or `secrets/` walking up from cwd, then `~/.argos/` (`dash.env` / `argos.env`). Do not commit tokens.
 

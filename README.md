@@ -8,7 +8,7 @@ Agent-friendly **once / soak** test framework. Humans or coding agents run cases
 | Docs | https://lpythu.github.io/argos/ |
 | Agent skill | https://lpythu.github.io/argos/skill.md |
 | SDK | https://lpythu.github.io/argos/sdk.md |
-| Git | https://github.com/lpythu/argos |
+| Git | https://github.com/lpythu/argos (library); https://acahti.saidc.ai/saidc/argos-dash (dash) |
 
 **Agents:** `Install https://lpythu.github.io/argos/skill.md` then drive the same CLI. Cases live in a pack repo (entry points), not in this framework repo.
 
@@ -51,6 +51,7 @@ flowchart LR
   envFile --> cli
   cli --> out
   cli -->|ingest| dashUI
+  cli -->|"GET /report-view"| dashUI
 ```
 
 ```bash
@@ -103,6 +104,8 @@ New product pack: `pack.py` exporting `pack() -> Pack`, plus `[project.entry-poi
 | Read | Where |
 |---|---|
 | This README | Human / agent overview |
+| Architecture | https://lpythu.github.io/argos/architecture/ |
+| Ingest (CLI → dash) | https://lpythu.github.io/argos/ingest/ |
 | Agent contract | https://lpythu.github.io/argos/skill.md |
 | Terminal & `out/` | https://lpythu.github.io/argos/local/ |
 | Python API | https://lpythu.github.io/argos/sdk.md |
@@ -110,4 +113,4 @@ New product pack: `pack.py` exporting `pack() -> Pack`, plus `[project.entry-poi
 
 ## Repo layout
 
-This repository is the **framework** (`argospy`) plus **dash** source. Product cases belong in a separate pack repo. Dash is optional infrastructure you deploy; the library does not require it.
+This repository is the **library** (`argospy`). Product cases belong in a pack repo. Dash is optional infrastructure in **argos-dash** (Acahti); the library does not require it. See [Architecture](https://lpythu.github.io/argos/architecture/).

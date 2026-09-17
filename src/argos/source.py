@@ -1,5 +1,24 @@
+import getpass
 import os
 from typing import Any
+
+
+def _env(*names: str) -> str:
+    for name in names:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _local_actor() -> str:
+    actor = _env("ARGOS_ACTOR", "USER", "LOGNAME")
+    if actor:
+        return actor
+    try:
+        return (getpass.getuser() or "").strip()
+    except Exception:
+        return ""
 
 
 def run_source(*, note: str = "") -> dict[str, Any]:
@@ -17,7 +36,7 @@ def run_source(*, note: str = "") -> dict[str, Any]:
             or ""
         ).strip()
         pipeline: int | None = int(number) if number.isdigit() else None
-        out: dict[str, Any] = {
+        return {
             "kind": "acahti",
             "repo": repo,
             "sha": (os.environ.get("CI_COMMIT_SHA") or "").strip(),
@@ -26,8 +45,7 @@ def run_source(*, note: str = "") -> dict[str, Any]:
             "job": (os.environ.get("CI_WORKFLOW_NAME") or "").strip(),
             "step": (os.environ.get("CI_STEP_NAME") or "").strip(),
             "url": url,
-            "actor": (os.environ.get("CI_COMMIT_AUTHOR") or os.environ.get("ACAHTI_USER") or "").strip(),
+            "actor": _env("ACAHTI_USER", "CI_COMMIT_AUTHOR") or _local_actor(),
             "note": note,
         }
-        return out
-    return {"kind": "cli", "note": note}
+    return {"kind": "cli", "note": note, "actor": _local_actor()}

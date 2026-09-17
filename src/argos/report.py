@@ -1,6 +1,7 @@
 """Structured common report renderer used by every Argos case."""
 
 import copy
+import html
 import json
 import re
 import shlex
@@ -8,9 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from argos.case import Result
+from argos.client import load_report_view
 from argos.term import fmt_dur
 
-_STATIC_REPORT = Path(__file__).resolve().parent / "static" / "report"
 _ITER_DIR = re.compile(r"^(.+)__(\d{4})$")
 _UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b", re.I)
 _HEX_RE = re.compile(r"\b[0-9a-f]{12,}\b", re.I)
@@ -149,7 +150,13 @@ def enrich_payload(payload: dict, dest: Path | None = None) -> dict:
     return data
 
 
-def write_reports(dest: Path, results: list[Result], started: str, wall_s: float | None = None) -> None:
+def write_reports(
+    dest: Path,
+    results: list[Result],
+    started: str,
+    wall_s: float | None = None,
+    dash_spec: str | None = None,
+) -> None:
     payload = enrich_payload({
         "started": started,
         "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -158,7 +165,7 @@ def write_reports(dest: Path, results: list[Result], started: str, wall_s: float
     }, dest)
     (dest / "report.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     (dest / "report.md").write_text(markdown(payload), encoding="utf-8")
-    (dest / "report.html").write_text(html_doc(payload), encoding="utf-8")
+    (dest / "report.html").write_text(html_doc(payload, dash_spec), encoding="utf-8")
 
 
 def _fingerprint(error: str) -> str:
@@ -257,18 +264,29 @@ def _embed_for_tag(text: str, tag: str) -> str:
     return re.sub(rf"</{tag}\b", rf"<\\/{tag}", text, flags=re.I)
 
 
-def html_doc(payload: dict) -> str:
-    """Self-contained HTML shell: dash ReportView (prebuilt) + embedded report.json."""
+def html_doc(payload: dict, dash_spec: str | None = None) -> str:
+    """Self-contained HTML: dash ReportView IIFE if cached/fetched, else a plain shell."""
     data = enrich_payload(payload)
-    css_path = _STATIC_REPORT / "viewer.css"
-    js_path = _STATIC_REPORT / "viewer.js"
-    if not css_path.is_file() or not js_path.is_file():
-        raise FileNotFoundError(
-            f"missing report viewer at {_STATIC_REPORT}; run: npm run build:report (in dash/ui)"
-        )
-    css = _embed_for_tag(css_path.read_text(encoding="utf-8"), "style")
-    js = _embed_for_tag(js_path.read_text(encoding="utf-8"), "script")
+    assets = load_report_view(dash_spec)
     payload_json = json.dumps(data, ensure_ascii=False, default=str).replace("<", "\\u003c")
+    if assets is None:
+        status = html.escape(str(data.get("status") or "unknown"))
+        return (
+            "<!DOCTYPE html>\n"
+            '<html lang="zh-CN">\n'
+            "<head>\n"
+            '<meta charset="utf-8"/>\n'
+            '<meta name="viewport" content="width=device-width,initial-scale=1"/>\n'
+            "<title>Argos 测试报告</title>\n"
+            "</head>\n"
+            "<body>\n"
+            f"<p>status: {status}</p>\n"
+            "<p>Open <code>report.json</code> in this directory, or configure a dash URL to embed the styled viewer.</p>\n"
+            "</body>\n"
+            "</html>\n"
+        )
+    css = _embed_for_tag(assets[0], "style")
+    js = _embed_for_tag(assets[1], "script")
     return (
         "<!DOCTYPE html>\n"
         '<html lang="zh-CN">\n'

@@ -1,21 +1,22 @@
-# Releasing argos
+# Releasing argospy
 
 Tag **`X.Y.Z`**（不带 `v`）触发 [`.github/workflows/release.yml`](.github/workflows/release.yml)：
 
-1. 校验 tag 与 `pyproject.toml` / `chart/Chart.yaml` 一致
+1. 校验 tag 与 `pyproject.toml` 一致
 2. `uv build` → PyPI `argospy`（Trusted Publishing）
-3. buildof 打 dash 镜像并 helm 到 office
 
-本机不执行 `uv publish` / helm。
+Dash 镜像在 Acahti [`saidc/argos-dash`](https://acahti.saidc.ai/saidc/argos-dash)：`git push origin dev` 跑 `cd.office`。不跟这个 tag。
+
+本机不执行 `uv publish`。
 
 ## Everyday
 
 ```bash
-./scripts/release.sh 0.3.0
+./scripts/release.sh 0.6.1
 git push origin main --tags
 ```
 
-脚本只改版本、提交、打 annotated tag。推送后由 Actions 发布。
+脚本只改 `argospy` 版本、提交、打 annotated tag。推送后由 Actions 发 PyPI。
 
 ## One-time: PyPI Trusted Publishing
 

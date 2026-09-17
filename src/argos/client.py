@@ -84,14 +84,101 @@ def resolve_dash(spec: str | None) -> DashConfig:
     return DashConfig(url=url, token=token)
 
 
-def dash_url(override: str = "") -> str:
-    """Legacy helper: URL only. Prefer resolve_dash for push."""
-    raw = (override or os.environ.get("ARGOS_DASH_URL") or "").strip()
-    return raw.rstrip("/")
+def peek_dash_url(spec: str | None = None) -> str:
+    """Dash origin for the report template. Empty if none is configured. No token."""
+    url = (os.environ.get("ARGOS_DASH_URL") or "").strip()
+    raw = (spec or "").strip()
+    if raw:
+        if raw.startswith("http://") or raw.startswith("https://"):
+            url = raw.rstrip("/")
+        else:
+            path = Path(raw).expanduser()
+            if path.is_file():
+                data = _parse_env_file(path)
+                url = (data.get("ARGOS_DASH_URL") or url).strip().rstrip("/")
+    if not url:
+        discovered = _discover_dash_env()
+        if discovered is not None:
+            data = _parse_env_file(discovered)
+            url = (data.get("ARGOS_DASH_URL") or url).strip().rstrip("/")
+    return url.rstrip("/")
 
 
-def dash_token() -> str:
-    return (os.environ.get("ARGOS_TOKEN") or "").strip()
+INGEST_VERSION = "1"
+
+
+def _view_cache_dir() -> Path:
+    return Path.home() / ".argos" / "report-view" / INGEST_VERSION
+
+
+def _read_view_cache() -> tuple[str, str] | None:
+    root = _view_cache_dir()
+    css_path, js_path = root / "viewer.css", root / "viewer.js"
+    if css_path.is_file() and js_path.is_file():
+        return css_path.read_text(encoding="utf-8"), js_path.read_text(encoding="utf-8")
+    return None
+
+
+def _write_view_cache(css: str, js: str) -> None:
+    root = _view_cache_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "viewer.css").write_text(css, encoding="utf-8")
+    (root / "viewer.js").write_text(js, encoding="utf-8")
+
+
+def _http_get(url: str, etag: str = "") -> tuple[int, bytes, str]:
+    headers = {"User-Agent": user_agent(), "Accept": "*/*"}
+    if etag:
+        headers["If-None-Match"] = etag
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return int(resp.status), resp.read(), str(resp.headers.get("ETag") or "")
+    except urllib.error.HTTPError as exc:
+        body = exc.read()
+        tag = str(exc.headers.get("ETag") or "") if exc.headers else ""
+        return int(exc.code), body, tag
+
+
+def _fetch_asset(origin: str, name: str) -> str | None:
+    root = _view_cache_dir()
+    path = root / name
+    etag_path = root / f"{name}.etag"
+    etag = etag_path.read_text(encoding="utf-8").strip() if etag_path.is_file() else ""
+    code, body, new_etag = _http_get(f"{origin}/report-view/{name}", etag)
+    if code == 304 and path.is_file():
+        return path.read_text(encoding="utf-8")
+    if code != 200 or not body:
+        return None
+    text = body.decode("utf-8")
+    root.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    if new_etag:
+        etag_path.write_text(new_etag, encoding="utf-8")
+    return text
+
+
+def load_report_view(spec: str | None = None) -> tuple[str, str] | None:
+    """CSS + JS for local report.html. Cache under ~/.argos/report-view/<ingest>/."""
+    cached = _read_view_cache()
+    origin = peek_dash_url(spec)
+    if not origin:
+        return cached
+    try:
+        code, body, _ = _http_get(f"{origin}/report-view/manifest.json")
+        if code != 200 or not body:
+            return cached
+        manifest = json.loads(body.decode("utf-8"))
+        if not isinstance(manifest, dict) or str(manifest.get("ingest") or "") != INGEST_VERSION:
+            return cached
+        css = _fetch_asset(origin, "viewer.css")
+        js = _fetch_asset(origin, "viewer.js")
+        if css is None or js is None:
+            return cached
+        _write_view_cache(css, js)
+        return css, js
+    except Exception:
+        return cached
 
 
 def user_agent() -> str:
@@ -132,6 +219,7 @@ class Client:
                 "Content-Type": "application/json; charset=utf-8",
                 "Authorization": f"Bearer {self.token}",
                 "User-Agent": user_agent(),
+                "X-Argos-Ingest": INGEST_VERSION,
             },
         )
         try:

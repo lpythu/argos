@@ -261,7 +261,7 @@ def run_cases(
         for pack in involved:
             if pack.soak_teardown:
                 pack.soak_teardown(dest, emit, [c for c in chosen if c.spec.pack == pack.id])
-    write_reports(dest, results, stamp, wall_s=time.time() - started)
+    write_reports(dest, results, stamp, wall_s=time.time() - started, dash_spec=dash)
     failed = next((result for result in results if result.status == "fail"), None)
     final = "interrupted" if interrupted else "fail" if failed or not results else "pass"
     run_status.finish(final, failed.error if failed else "")
