@@ -4,6 +4,7 @@ Tag **`X.Y.Z`**（不带 `v`）触发 [`.github/workflows/release.yml`](.github/
 
 1. 校验 tag 与 `pyproject.toml` 一致
 2. `uv build` → PyPI `argospy`（Trusted Publishing）
+3. 同一 tag 触发 Docs → GitHub Pages（`skill.md` / architecture 跟着这个版本）
 
 Dash 镜像在 Acahti [`saidc/argos-dash`](https://acahti.saidc.ai/saidc/argos-dash)：`git push origin dev` 跑 `cd.office`。不跟这个 tag。
 
