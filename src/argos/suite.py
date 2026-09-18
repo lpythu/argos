@@ -9,6 +9,10 @@ from argos.runner import CaseFn, run_one
 
 _PACKS: list[Pack] | None = None
 
+# Aliyun public stack: bj-test replaced hk. Accept either name so
+# already-tagged CD (`--env bj-test`) still applies packs that only list hk.
+_ENV_ALIASES = {"bj-test": "hk", "hk": "bj-test"}
+
 
 def all_packs() -> list[Pack]:
     global _PACKS
@@ -30,6 +34,9 @@ def env_names() -> tuple[str, ...]:
         for name in pack.envs:
             if name not in seen:
                 seen.append(name)
+    for name, alias in _ENV_ALIASES.items():
+        if name in seen and alias not in seen:
+            seen.append(alias)
     return tuple(seen)
 
 
@@ -37,6 +44,12 @@ def apply_env(name: str, packs: list[Pack] | None = None) -> str:
     env = (name or "").strip().lower()
     targets = packs if packs is not None else all_packs()
     matched = [pack for pack in targets if env in pack.envs]
+    if not matched:
+        alias = _ENV_ALIASES.get(env)
+        if alias:
+            matched = [pack for pack in targets if alias in pack.envs]
+            if matched:
+                env = alias
     if not matched:
         allowed = ", ".join(env_names()) or "(none)"
         raise ValueError(f"unknown env {name!r}; use {allowed}")
