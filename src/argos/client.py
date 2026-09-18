@@ -188,6 +188,30 @@ def user_agent() -> str:
         return "argospy"
 
 
+def format_dash_error(method: str, url: str, detail: str, code: int | None = None) -> str:
+    summary = _summarize_dash_body(detail)
+    if code is not None:
+        return f"{method} {url} -> {code}: {summary}"
+    return f"{method} {url}: {summary}"
+
+
+def _summarize_dash_body(detail: str) -> str:
+    text = (detail or "").strip()
+    if not text:
+        return "empty response"
+    try:
+        body = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    if not isinstance(body, dict):
+        return text
+    title = str(body.get("title") or body.get("error_name") or body.get("error") or "").strip()
+    zone = str(body.get("zone") or "").strip()
+    extra = str(body.get("detail") or "").strip()
+    parts = [part for part in (title, f"zone {zone}" if zone else "", extra) if part]
+    return "; ".join(parts) if parts else text
+
+
 class Client:
     def __init__(self, base: str, token: str) -> None:
         self.base = base.rstrip("/")
@@ -210,8 +234,9 @@ class Client:
 
     def _json(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         data = None if body is None else json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
+        url = urljoin(self.base + "/", path.lstrip("/"))
         req = urllib.request.Request(
-            urljoin(self.base + "/", path.lstrip("/")),
+            url,
             data=data,
             method=method,
             headers={
@@ -227,14 +252,14 @@ class Client:
                 raw = resp.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise DashError(f"{method} {path} -> {exc.code}: {detail}") from exc
+            raise DashError(format_dash_error(method, url, detail, exc.code)) from exc
         except urllib.error.URLError as exc:
-            raise DashError(f"{method} {path}: {exc.reason}") from exc
+            raise DashError(format_dash_error(method, url, str(exc.reason))) from exc
         if not raw:
             return {}
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
-            raise DashError(f"{method} {path}: expected object")
+            raise DashError(format_dash_error(method, url, "expected object"))
         return parsed
 
 

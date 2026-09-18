@@ -178,13 +178,14 @@ def run_cases(
         try:
             cfg = resolve_dash(dash)
         except DashError as exc:
-            print(exc, file=sys.stderr)
+            print(exc, file=sys.stderr, flush=True)
             return 2
+        print(f"dash {cfg.url}", flush=True)
         remote = Client(cfg.url, cfg.token)
         try:
             created = remote.create_run(run_meta)
         except DashError as exc:
-            print(exc, file=sys.stderr)
+            print(exc, file=sys.stderr, flush=True)
             return 2
         remote_id = str(created.get("sid") or created.get("id") or "")
         print(f"argos {remote_id}")
