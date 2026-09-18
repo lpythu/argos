@@ -87,7 +87,7 @@ def pack() -> Pack:
     return Pack(
         id="demo",
         title="Demo pack",
-        envs=("office", "hk"),
+        envs=("office", "bj-test"),
         apply_env=_apply_env,          # (name: str) -> str
         load_cases=_load,              # () -> list[CaseFn]
         # optional:
