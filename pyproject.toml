@@ -1,7 +1,9 @@
 [project]
 name = "argospy"
 version = "0.6.3"
-description = "once / soak test framework"
+description = "Repeatable once/soak checks with reviewable evidence for people and agents"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Peiyang Li" }]

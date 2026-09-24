@@ -16,6 +16,7 @@ theme:
         name: Light mode
 nav:
   - Home: index.md
+  - Use cases: use-cases.md
   - Architecture: architecture.md
   - Ingest: ingest.md
   - Agent skill: skill.md

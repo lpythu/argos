@@ -10,8 +10,8 @@ There is no Python package dependency between the library and dash. Cases live i
 |---|---|---|
 | Git [`lpythu/argos`](https://github.com/lpythu/argos) | GitHub | CLI / SDK (`import argos`, command `argos`) |
 | PyPI `argospy` | pypi.org | Install the library (`pip install argospy`) |
-| Git [`saidc/argos-dash`](https://acahti.saidc.ai/saidc/argos-dash) | Acahti | Hosted run browser, ingest receiver, ReportView source |
-| Image `platform/argos` | Harbor | What office Helm deploys (`argos.saidc.ai`) |
+| Git [`lpythu/argos-dash`](https://github.com/lpythu/argos-dash) | GitHub | Hosted run browser, ingest receiver, ReportView source |
+| Image `platform/argos` | Your registry | Your self-hosted dashboard image |
 | `argos-pack` | Acahti | Product cases (`argos.packs` entry points) |
 
 `argospy` is only the PyPI name (`argos` is the product, import, and CLI).
@@ -21,9 +21,9 @@ flowchart TB
   pack["argos-pack cases"]
   lib["GitHub lpythu/argos"]
   pypi["PyPI argospy"]
-  dashGit["Acahti saidc/argos-dash"]
+  dashGit["GitHub lpythu/argos-dash"]
   image["Harbor platform/argos"]
-  dash["argos.saidc.ai"]
+  dash["dash.example.com"]
   pack -->|"pip + entry points"| pypi
   lib --> pypi
   dashGit --> image --> dash
